@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ArrowUpRight, Download, Filter, Plus, Search } from "lucide-react";
+import { useEffect, useState } from 'react';
 import { Card, ConfidenceBar, PageHeader, StatusBadge, Stat } from "@/components/app/primitives";
-import { operations } from "@/lib/mock-data";
+import type { ContaAPagar } from "../types/contas";
 
 export const Route = createFileRoute("/contas-a-pagar")({
   head: () => ({ meta: [{ title: "Contas a Pagar · Veridia" }] }),
@@ -11,7 +12,30 @@ export const Route = createFileRoute("/contas-a-pagar")({
 const fmt = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 function Page() {
-  const rows = operations.filter((o) => o.valor > 0);
+  const [rows, setRows] = useState<ContaAPagar[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchContas = async () => {
+      try {
+        const res = await fetch('/api/webhooks/invoices');
+        if (!res.ok) return;
+        const data: ContaAPagar[] = await res.json();
+        if (!mounted) return;
+        setRows(data.filter((o) => Number(o.valor) > 0));
+      } catch (err) {
+        console.error('fetch contas error', err);
+      }
+    };
+
+    fetchContas();
+    const id = setInterval(fetchContas, 5000); // poll every 5s for dev convenience
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, []);
   return (
     <div className="max-w-[1480px] mx-auto px-6 py-8 space-y-6">
       <PageHeader
