@@ -84,7 +84,7 @@ function CentralIA() {
               >
                 <div className="flex items-start justify-between">
                   <div className="size-9 rounded-lg bg-ai/12 text-ai grid place-items-center group-hover:bg-ai/18 transition-colors">
-                    <Icon className="size-4.5" />
+                    <Icon className="size-5" />
                   </div>
                   <StatusBadge status={a.status} />
                 </div>
