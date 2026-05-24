@@ -9,8 +9,92 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RelatoriosRouteImport } from './routes/relatorios'
+import { Route as OperacoesRouteImport } from './routes/operacoes'
+import { Route as LogsIaRouteImport } from './routes/logs-ia'
+import { Route as FornecedoresRouteImport } from './routes/fornecedores'
+import { Route as FluxosRouteImport } from './routes/fluxos'
+import { Route as ExecutivoRouteImport } from './routes/executivo'
+import { Route as ExcecoesRouteImport } from './routes/excecoes'
+import { Route as ContasAReceberRouteImport } from './routes/contas-a-receber'
+import { Route as ContasAPagarRouteImport } from './routes/contas-a-pagar'
+import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
+import { Route as ConciliacaoRouteImport } from './routes/conciliacao'
+import { Route as ClientesRouteImport } from './routes/clientes'
+import { Route as CentralIaRouteImport } from './routes/central-ia'
+import { Route as AutomacaoRouteImport } from './routes/automacao'
 import { Route as IndexRouteImport } from './routes/index'
 
+const RelatoriosRoute = RelatoriosRouteImport.update({
+  id: '/relatorios',
+  path: '/relatorios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperacoesRoute = OperacoesRouteImport.update({
+  id: '/operacoes',
+  path: '/operacoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LogsIaRoute = LogsIaRouteImport.update({
+  id: '/logs-ia',
+  path: '/logs-ia',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FornecedoresRoute = FornecedoresRouteImport.update({
+  id: '/fornecedores',
+  path: '/fornecedores',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FluxosRoute = FluxosRouteImport.update({
+  id: '/fluxos',
+  path: '/fluxos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExecutivoRoute = ExecutivoRouteImport.update({
+  id: '/executivo',
+  path: '/executivo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExcecoesRoute = ExcecoesRouteImport.update({
+  id: '/excecoes',
+  path: '/excecoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContasAReceberRoute = ContasAReceberRouteImport.update({
+  id: '/contas-a-receber',
+  path: '/contas-a-receber',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContasAPagarRoute = ContasAPagarRouteImport.update({
+  id: '/contas-a-pagar',
+  path: '/contas-a-pagar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConciliacaoRoute = ConciliacaoRouteImport.update({
+  id: '/conciliacao',
+  path: '/conciliacao',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClientesRoute = ClientesRouteImport.update({
+  id: '/clientes',
+  path: '/clientes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CentralIaRoute = CentralIaRouteImport.update({
+  id: '/central-ia',
+  path: '/central-ia',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AutomacaoRoute = AutomacaoRouteImport.update({
+  id: '/automacao',
+  path: '/automacao',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -19,28 +103,228 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/automacao': typeof AutomacaoRoute
+  '/central-ia': typeof CentralIaRoute
+  '/clientes': typeof ClientesRoute
+  '/conciliacao': typeof ConciliacaoRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/contas-a-pagar': typeof ContasAPagarRoute
+  '/contas-a-receber': typeof ContasAReceberRoute
+  '/excecoes': typeof ExcecoesRoute
+  '/executivo': typeof ExecutivoRoute
+  '/fluxos': typeof FluxosRoute
+  '/fornecedores': typeof FornecedoresRoute
+  '/logs-ia': typeof LogsIaRoute
+  '/operacoes': typeof OperacoesRoute
+  '/relatorios': typeof RelatoriosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/automacao': typeof AutomacaoRoute
+  '/central-ia': typeof CentralIaRoute
+  '/clientes': typeof ClientesRoute
+  '/conciliacao': typeof ConciliacaoRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/contas-a-pagar': typeof ContasAPagarRoute
+  '/contas-a-receber': typeof ContasAReceberRoute
+  '/excecoes': typeof ExcecoesRoute
+  '/executivo': typeof ExecutivoRoute
+  '/fluxos': typeof FluxosRoute
+  '/fornecedores': typeof FornecedoresRoute
+  '/logs-ia': typeof LogsIaRoute
+  '/operacoes': typeof OperacoesRoute
+  '/relatorios': typeof RelatoriosRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/automacao': typeof AutomacaoRoute
+  '/central-ia': typeof CentralIaRoute
+  '/clientes': typeof ClientesRoute
+  '/conciliacao': typeof ConciliacaoRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/contas-a-pagar': typeof ContasAPagarRoute
+  '/contas-a-receber': typeof ContasAReceberRoute
+  '/excecoes': typeof ExcecoesRoute
+  '/executivo': typeof ExecutivoRoute
+  '/fluxos': typeof FluxosRoute
+  '/fornecedores': typeof FornecedoresRoute
+  '/logs-ia': typeof LogsIaRoute
+  '/operacoes': typeof OperacoesRoute
+  '/relatorios': typeof RelatoriosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/automacao'
+    | '/central-ia'
+    | '/clientes'
+    | '/conciliacao'
+    | '/configuracoes'
+    | '/contas-a-pagar'
+    | '/contas-a-receber'
+    | '/excecoes'
+    | '/executivo'
+    | '/fluxos'
+    | '/fornecedores'
+    | '/logs-ia'
+    | '/operacoes'
+    | '/relatorios'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/automacao'
+    | '/central-ia'
+    | '/clientes'
+    | '/conciliacao'
+    | '/configuracoes'
+    | '/contas-a-pagar'
+    | '/contas-a-receber'
+    | '/excecoes'
+    | '/executivo'
+    | '/fluxos'
+    | '/fornecedores'
+    | '/logs-ia'
+    | '/operacoes'
+    | '/relatorios'
+  id:
+    | '__root__'
+    | '/'
+    | '/automacao'
+    | '/central-ia'
+    | '/clientes'
+    | '/conciliacao'
+    | '/configuracoes'
+    | '/contas-a-pagar'
+    | '/contas-a-receber'
+    | '/excecoes'
+    | '/executivo'
+    | '/fluxos'
+    | '/fornecedores'
+    | '/logs-ia'
+    | '/operacoes'
+    | '/relatorios'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AutomacaoRoute: typeof AutomacaoRoute
+  CentralIaRoute: typeof CentralIaRoute
+  ClientesRoute: typeof ClientesRoute
+  ConciliacaoRoute: typeof ConciliacaoRoute
+  ConfiguracoesRoute: typeof ConfiguracoesRoute
+  ContasAPagarRoute: typeof ContasAPagarRoute
+  ContasAReceberRoute: typeof ContasAReceberRoute
+  ExcecoesRoute: typeof ExcecoesRoute
+  ExecutivoRoute: typeof ExecutivoRoute
+  FluxosRoute: typeof FluxosRoute
+  FornecedoresRoute: typeof FornecedoresRoute
+  LogsIaRoute: typeof LogsIaRoute
+  OperacoesRoute: typeof OperacoesRoute
+  RelatoriosRoute: typeof RelatoriosRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/relatorios': {
+      id: '/relatorios'
+      path: '/relatorios'
+      fullPath: '/relatorios'
+      preLoaderRoute: typeof RelatoriosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operacoes': {
+      id: '/operacoes'
+      path: '/operacoes'
+      fullPath: '/operacoes'
+      preLoaderRoute: typeof OperacoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logs-ia': {
+      id: '/logs-ia'
+      path: '/logs-ia'
+      fullPath: '/logs-ia'
+      preLoaderRoute: typeof LogsIaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fornecedores': {
+      id: '/fornecedores'
+      path: '/fornecedores'
+      fullPath: '/fornecedores'
+      preLoaderRoute: typeof FornecedoresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fluxos': {
+      id: '/fluxos'
+      path: '/fluxos'
+      fullPath: '/fluxos'
+      preLoaderRoute: typeof FluxosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/executivo': {
+      id: '/executivo'
+      path: '/executivo'
+      fullPath: '/executivo'
+      preLoaderRoute: typeof ExecutivoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/excecoes': {
+      id: '/excecoes'
+      path: '/excecoes'
+      fullPath: '/excecoes'
+      preLoaderRoute: typeof ExcecoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contas-a-receber': {
+      id: '/contas-a-receber'
+      path: '/contas-a-receber'
+      fullPath: '/contas-a-receber'
+      preLoaderRoute: typeof ContasAReceberRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contas-a-pagar': {
+      id: '/contas-a-pagar'
+      path: '/contas-a-pagar'
+      fullPath: '/contas-a-pagar'
+      preLoaderRoute: typeof ContasAPagarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/configuracoes': {
+      id: '/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof ConfiguracoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conciliacao': {
+      id: '/conciliacao'
+      path: '/conciliacao'
+      fullPath: '/conciliacao'
+      preLoaderRoute: typeof ConciliacaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clientes': {
+      id: '/clientes'
+      path: '/clientes'
+      fullPath: '/clientes'
+      preLoaderRoute: typeof ClientesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/central-ia': {
+      id: '/central-ia'
+      path: '/central-ia'
+      fullPath: '/central-ia'
+      preLoaderRoute: typeof CentralIaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/automacao': {
+      id: '/automacao'
+      path: '/automacao'
+      fullPath: '/automacao'
+      preLoaderRoute: typeof AutomacaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -53,17 +337,21 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AutomacaoRoute: AutomacaoRoute,
+  CentralIaRoute: CentralIaRoute,
+  ClientesRoute: ClientesRoute,
+  ConciliacaoRoute: ConciliacaoRoute,
+  ConfiguracoesRoute: ConfiguracoesRoute,
+  ContasAPagarRoute: ContasAPagarRoute,
+  ContasAReceberRoute: ContasAReceberRoute,
+  ExcecoesRoute: ExcecoesRoute,
+  ExecutivoRoute: ExecutivoRoute,
+  FluxosRoute: FluxosRoute,
+  FornecedoresRoute: FornecedoresRoute,
+  LogsIaRoute: LogsIaRoute,
+  OperacoesRoute: OperacoesRoute,
+  RelatoriosRoute: RelatoriosRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
