@@ -29,7 +29,7 @@ function Conciliacao() {
         <Stat label="Conciliado" value="92%" accent="ai" />
         <Stat label="Transações conciliadas" value="1.418" accent="success" />
         <Stat label="Pendências" value="64" accent="warning" />
-        <Stat label="Divergências" value="9" accent="destructive" as any />
+        <Stat label="Divergências" value="9" accent="warning" />
       </div>
 
       <Card className="overflow-hidden">

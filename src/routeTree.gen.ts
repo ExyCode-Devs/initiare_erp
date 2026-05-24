@@ -9,8 +9,44 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as OperacoesRouteImport } from './routes/operacoes'
+import { Route as LogsIaRouteImport } from './routes/logs-ia'
+import { Route as ExecutivoRouteImport } from './routes/executivo'
+import { Route as ExcecoesRouteImport } from './routes/excecoes'
+import { Route as ConciliacaoRouteImport } from './routes/conciliacao'
+import { Route as CentralIaRouteImport } from './routes/central-ia'
 import { Route as IndexRouteImport } from './routes/index'
 
+const OperacoesRoute = OperacoesRouteImport.update({
+  id: '/operacoes',
+  path: '/operacoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LogsIaRoute = LogsIaRouteImport.update({
+  id: '/logs-ia',
+  path: '/logs-ia',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExecutivoRoute = ExecutivoRouteImport.update({
+  id: '/executivo',
+  path: '/executivo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExcecoesRoute = ExcecoesRouteImport.update({
+  id: '/excecoes',
+  path: '/excecoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConciliacaoRoute = ConciliacaoRouteImport.update({
+  id: '/conciliacao',
+  path: '/conciliacao',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CentralIaRoute = CentralIaRouteImport.update({
+  id: '/central-ia',
+  path: '/central-ia',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -19,28 +55,116 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/central-ia': typeof CentralIaRoute
+  '/conciliacao': typeof ConciliacaoRoute
+  '/excecoes': typeof ExcecoesRoute
+  '/executivo': typeof ExecutivoRoute
+  '/logs-ia': typeof LogsIaRoute
+  '/operacoes': typeof OperacoesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/central-ia': typeof CentralIaRoute
+  '/conciliacao': typeof ConciliacaoRoute
+  '/excecoes': typeof ExcecoesRoute
+  '/executivo': typeof ExecutivoRoute
+  '/logs-ia': typeof LogsIaRoute
+  '/operacoes': typeof OperacoesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/central-ia': typeof CentralIaRoute
+  '/conciliacao': typeof ConciliacaoRoute
+  '/excecoes': typeof ExcecoesRoute
+  '/executivo': typeof ExecutivoRoute
+  '/logs-ia': typeof LogsIaRoute
+  '/operacoes': typeof OperacoesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/central-ia'
+    | '/conciliacao'
+    | '/excecoes'
+    | '/executivo'
+    | '/logs-ia'
+    | '/operacoes'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/central-ia'
+    | '/conciliacao'
+    | '/excecoes'
+    | '/executivo'
+    | '/logs-ia'
+    | '/operacoes'
+  id:
+    | '__root__'
+    | '/'
+    | '/central-ia'
+    | '/conciliacao'
+    | '/excecoes'
+    | '/executivo'
+    | '/logs-ia'
+    | '/operacoes'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CentralIaRoute: typeof CentralIaRoute
+  ConciliacaoRoute: typeof ConciliacaoRoute
+  ExcecoesRoute: typeof ExcecoesRoute
+  ExecutivoRoute: typeof ExecutivoRoute
+  LogsIaRoute: typeof LogsIaRoute
+  OperacoesRoute: typeof OperacoesRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/operacoes': {
+      id: '/operacoes'
+      path: '/operacoes'
+      fullPath: '/operacoes'
+      preLoaderRoute: typeof OperacoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logs-ia': {
+      id: '/logs-ia'
+      path: '/logs-ia'
+      fullPath: '/logs-ia'
+      preLoaderRoute: typeof LogsIaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/executivo': {
+      id: '/executivo'
+      path: '/executivo'
+      fullPath: '/executivo'
+      preLoaderRoute: typeof ExecutivoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/excecoes': {
+      id: '/excecoes'
+      path: '/excecoes'
+      fullPath: '/excecoes'
+      preLoaderRoute: typeof ExcecoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conciliacao': {
+      id: '/conciliacao'
+      path: '/conciliacao'
+      fullPath: '/conciliacao'
+      preLoaderRoute: typeof ConciliacaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/central-ia': {
+      id: '/central-ia'
+      path: '/central-ia'
+      fullPath: '/central-ia'
+      preLoaderRoute: typeof CentralIaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -53,6 +177,12 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CentralIaRoute: CentralIaRoute,
+  ConciliacaoRoute: ConciliacaoRoute,
+  ExcecoesRoute: ExcecoesRoute,
+  ExecutivoRoute: ExecutivoRoute,
+  LogsIaRoute: LogsIaRoute,
+  OperacoesRoute: OperacoesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
