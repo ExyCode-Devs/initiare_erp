@@ -1,0 +1,92 @@
+name: Deploy Hostinger
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        description: "Branch, tag or commit SHA to deploy"
+        required: false
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hostinger-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      REMOTE_HOST: ${{ secrets.HOSTINGER_HOST }}
+      REMOTE_PORT: ${{ secrets.HOSTINGER_PORT || '22' }}
+      REMOTE_USER: ${{ secrets.HOSTINGER_USER }}
+      REMOTE_APP_DIR: ${{ secrets.HOSTINGER_APP_DIR }}
+      REMOTE_APP_PORT: ${{ secrets.HOSTINGER_APP_PORT || '3000' }}
+      PM2_APP_NAME: axiom-prime
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.git_ref || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Validate required secrets
+        run: |
+          test -n "$REMOTE_HOST"
+          test -n "$REMOTE_USER"
+          test -n "$REMOTE_APP_DIR"
+
+      - name: Configure SSH
+        env:
+          HOSTINGER_SSH_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$HOSTINGER_SSH_KEY" > ~/.ssh/hostinger_key
+          chmod 600 ~/.ssh/hostinger_key
+          ssh-keyscan -p "$REMOTE_PORT" "$REMOTE_HOST" >> ~/.ssh/known_hosts
+
+      - name: Ensure remote directory exists
+        run: |
+          ssh -i ~/.ssh/hostinger_key -p "$REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST" \
+            "mkdir -p '$REMOTE_APP_DIR'"
+
+      - name: Sync repository to server
+        run: |
+          rsync -az --delete \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude 'node_modules/' \
+            --exclude '.npm-cache/' \
+            --exclude '.output/' \
+            --exclude 'dist/' \
+            --exclude '.wrangler/' \
+            --exclude '.env' \
+            --exclude '.env.production' \
+            --exclude '.env.production.local' \
+            -e "ssh -i ~/.ssh/hostinger_key -p $REMOTE_PORT" \
+            ./ "$REMOTE_USER@$REMOTE_HOST:$REMOTE_APP_DIR/"
+
+      - name: Run remote deploy
+        run: |
+          ssh -i ~/.ssh/hostinger_key -p "$REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST" \
+            "cd '$REMOTE_APP_DIR' && chmod +x deploy/hostinger/deploy.sh && \
+            APP_DIR='$REMOTE_APP_DIR' PORT='$REMOTE_APP_PORT' PM2_APP_NAME='$PM2_APP_NAME' bash deploy/hostinger/deploy.sh"
