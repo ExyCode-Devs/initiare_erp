@@ -14,6 +14,19 @@ const fmt = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" 
 function Page() {
   const [rows, setRows] = useState<ContaAPagar[]>([]);
 
+  const now = new Date();
+  const total = rows.reduce((acc, r) => acc + Number(r.valor || 0), 0);
+  const venceEm7Dias = rows
+    .filter((r) => {
+      const d = new Date(r.vencimento);
+      const diffMs = d.getTime() - now.getTime();
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+      return diffDays >= 0 && diffDays <= 7;
+    })
+    .reduce((acc, r) => acc + Number(r.valor || 0), 0);
+  const atrasados = rows.filter((r) => new Date(r.vencimento).getTime() < now.getTime()).length;
+  const programadoIA = rows.filter((r) => r.status !== "Exceção").length;
+
   useEffect(() => {
     let mounted = true;
 
@@ -50,10 +63,10 @@ function Page() {
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Total a pagar" value="R$ 184k" accent="warning" icon={<ArrowUpRight className="size-4" />} />
-        <Stat label="Vence em 7 dias" value="R$ 42k" accent="info" />
-        <Stat label="Programado IA" value="43" accent="ai" />
-        <Stat label="Atrasados" value="2" accent="warning" />
+        <Stat label="Total a pagar" value={fmt.format(total)} accent="warning" icon={<ArrowUpRight className="size-4" />} />
+        <Stat label="Vence em 7 dias" value={fmt.format(venceEm7Dias)} accent="info" />
+        <Stat label="Programado IA" value={String(programadoIA)} accent="ai" />
+        <Stat label="Atrasados" value={String(atrasados)} accent="warning" />
       </div>
 
       <Card className="overflow-hidden">
@@ -76,6 +89,13 @@ function Page() {
             </tr>
           </thead>
           <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
+                  Nenhuma conta recebida ainda. Envie um webhook para <code>/api/webhooks/invoices</code> e aguarde até 5s.
+                </td>
+              </tr>
+            ) : null}
             {rows.map((r) => (
               <tr key={r.id} className="border-b border-border last:border-0 hover:bg-accent/40">
                 <td className="px-4 py-3 font-medium">{r.fornecedor}</td>

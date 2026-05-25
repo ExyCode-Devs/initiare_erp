@@ -115,8 +115,10 @@ export function Stat({
 }
 
 export function ConfidenceBar({ value }: { value: number }) {
-  const pct = Math.round(value * 100);
-  const color = value >= 0.9 ? "bg-success" : value >= 0.7 ? "bg-info" : value >= 0.5 ? "bg-warning" : "bg-destructive";
+  const normalized = value > 1 ? value / 100 : value;
+  const bounded = Math.max(0, Math.min(1, normalized));
+  const pct = Math.round(bounded * 100);
+  const color = bounded >= 0.9 ? "bg-success" : bounded >= 0.7 ? "bg-info" : bounded >= 0.5 ? "bg-warning" : "bg-destructive";
   return (
     <div className="flex items-center gap-2 w-full">
       <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">

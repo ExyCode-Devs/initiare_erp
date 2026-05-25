@@ -1,4 +1,4 @@
-import { Search, Bell, Plus, Sparkles, Command, Plug, Globe } from "lucide-react";
+import { Search, Bell, MessageSquare, Sparkles, Command, Plug, Globe } from "lucide-react";
 import { motion } from "framer-motion";
 
 export function Topbar() {
@@ -54,11 +54,14 @@ export function Topbar() {
           <span className="absolute top-2 right-2 size-1.5 rounded-full bg-warning" />
         </button>
 
-        {/* Create */}
-        <button className="flex items-center gap-1.5 h-9 px-3 rounded-md bg-foreground text-background text-[12.5px] font-medium hover:opacity-90 transition-opacity">
-          <Plus className="size-3.5" />
-          Criar
-        </button>
+        {/* Chat (IA) */}
+        <a
+          href="/chat"
+          className="size-9 grid place-items-center rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Abrir chat com a IA"
+        >
+          <MessageSquare className="size-4" />
+        </a>
 
         {/* AI quick */}
         <button className="size-9 grid place-items-center rounded-md bg-ai/10 border border-ai/25 text-ai hover:bg-ai/15 transition-colors">

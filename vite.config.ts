@@ -9,6 +9,30 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
 // @cloudflare/vite-plugin builds from this — wrangler.jsonc main alone is insufficient.
 export default defineConfig({
+  vite: {
+    server: {
+      port: 8080,
+      strictPort: true,
+    },
+    plugins: [
+      {
+        name: "tanstack-injected-head-scripts-virtual-fallback",
+        enforce: "pre",
+        resolveId(id) {
+          if (id === "tanstack-start-injected-head-scripts:v") {
+            return id;
+          }
+          return null;
+        },
+        load(id) {
+          if (id === "tanstack-start-injected-head-scripts:v") {
+            return "export const injectedHeadScripts = ''";
+          }
+          return null;
+        },
+      },
+    ],
+  },
   tanstackStart: {
     server: { entry: "server" },
   },
