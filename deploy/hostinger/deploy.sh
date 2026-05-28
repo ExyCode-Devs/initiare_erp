@@ -3,22 +3,21 @@
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-$(pwd)}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 
 cd "$APP_DIR"
 
-if [[ -f ".env.production" ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source ".env.production"
-  set +a
+if [[ ! -f ".env" ]]; then
+  echo "Missing .env file in $APP_DIR"
+  exit 1
 fi
 
-export HOST="${HOST:-0.0.0.0}"
-export PORT="${PORT:-3000}"
-export NODE_ENV=production
-export PM2_APP_NAME="${PM2_APP_NAME:-axiom-prime}"
+set -a
+# shellcheck disable=SC1091
+source ".env"
+set +a
 
-npm ci
-npm run build
-npx --yes pm2 startOrReload ecosystem.config.cjs --update-env
-npx --yes pm2 save || true
+docker network inspect "${TRAEFIK_NETWORK:-proxy}" >/dev/null 2>&1 || \
+  docker network create "${TRAEFIK_NETWORK:-proxy}"
+
+docker compose --env-file .env -f "$COMPOSE_FILE" up -d --build --remove-orphans
