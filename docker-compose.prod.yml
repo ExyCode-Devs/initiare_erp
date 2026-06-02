@@ -17,13 +17,13 @@ services:
       PORT: ${WEB_PORT:-3000}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.initiare_erp-web.rule=Host(`${TRAEFIK_HOST:?set_TRAEFIK_HOST}`) && !PathPrefix(`/api`)"
+      - "traefik.http.routers.initiare_erp-web.rule=Host(`${TRAEFIK_HOST:?set_TRAEFIK_HOST}`)"
       - "traefik.http.routers.initiare_erp-web.entrypoints=websecure"
       - "traefik.http.routers.initiare_erp-web.tls=true"
       - "traefik.http.routers.initiare_erp-web.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.initiare_erp-web.service=initiare_erp-web"
       - "traefik.http.services.initiare_erp-web.loadbalancer.server.port=${WEB_PORT:-3000}"
-      - "traefik.http.routers.initiare_erp-web-http.rule=Host(`${TRAEFIK_HOST:?set_TRAEFIK_HOST}`) && !PathPrefix(`/api`)"
+      - "traefik.http.routers.initiare_erp-web-http.rule=Host(`${TRAEFIK_HOST:?set_TRAEFIK_HOST}`)"
       - "traefik.http.routers.initiare_erp-web-http.entrypoints=web"
       - "traefik.http.routers.initiare_erp-web-http.service=initiare_erp-web"
       - "traefik.http.middlewares.initiare_erp-https-redirect.redirectscheme.scheme=https"
