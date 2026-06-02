@@ -40,7 +40,9 @@ jobs:
           WEB_IMAGE: docker.io/exycode/initiare-erp
           API_IMAGE: docker.io/exycode/initiare-erp-api
           IMAGE_TAG: ci
-        run: docker compose --env-file deploy/hostinger/.env.production.example -f docker-compose.prod.yml config
+        run: |
+          cp deploy/hostinger/.env.production.example .env
+          docker compose --env-file .env -f docker-compose.prod.yml config
 
       - name: Build web Docker image
         run: docker build -t initiare_erp-web:ci .
