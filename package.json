@@ -14,7 +14,7 @@
     "build:web": "vite build && tsc --noEmit",
     "build:api": "npm --prefix api run build",
     "build:dev": "vite build --mode development",
-    "start": "node .output/server/index.mjs",
+    "start": "node server.prod.mjs",
     "preview": "vite preview",
     "db:migrate": "npm --prefix api run prisma:migrate",
     "db:seed": "npm --prefix api run prisma:seed",

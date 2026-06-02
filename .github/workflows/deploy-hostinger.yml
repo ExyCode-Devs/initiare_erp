@@ -27,7 +27,7 @@ jobs:
       REMOTE_HOST: ${{ secrets.HOSTINGER_HOST }}
       REMOTE_PORT: ${{ secrets.HOSTINGER_PORT || '22' }}
       REMOTE_USER: ${{ secrets.HOSTINGER_USER }}
-      REMOTE_APP_DIR: ${{ secrets.HOSTINGER_APP_DIR }}
+      REMOTE_APP_DIR: /source/initiare_erp
 
     steps:
       - name: Checkout
@@ -54,16 +54,15 @@ jobs:
         run: npm run build
 
       - name: Build web Docker image
-        run: docker build -t axiom-prime-web:ci .
+        run: docker build -t initiare_erp-web:ci .
 
       - name: Build api Docker image
-        run: docker build -t axiom-prime-api:ci ./api
+        run: docker build -t initiare_erp-api:ci ./api
 
       - name: Validate required secrets
         run: |
           test -n "$REMOTE_HOST"
           test -n "$REMOTE_USER"
-          test -n "$REMOTE_APP_DIR"
 
       - name: Configure SSH
         env:

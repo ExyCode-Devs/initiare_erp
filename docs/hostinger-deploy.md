@@ -2,7 +2,7 @@
 
 ## Resumo
 
-O Axiom agora foi convertido para um MVP com:
+O Initiare ERP agora foi convertido para um MVP com:
 
 1. `web` separado da `api`
 2. `api` Fastify com JWT, RBAC, Prisma e Postgres
@@ -77,44 +77,44 @@ No servidor, dentro da pasta do projeto, crie um `.env` com base em:
 Variaveis principais:
 
 ```bash
-WEB_CONTAINER_NAME=axiom-prime-web
-API_CONTAINER_NAME=axiom-prime-api
-DB_CONTAINER_NAME=axiom-prime-postgres
-WEB_IMAGE=axiom-prime-web:latest
-API_IMAGE=axiom-prime-api:latest
+WEB_CONTAINER_NAME=initiare_erp-web
+API_CONTAINER_NAME=initiare_erp-api
+DB_CONTAINER_NAME=initiare_erp-postgres
+WEB_IMAGE=initiare_erp-web:latest
+API_IMAGE=initiare_erp-api:latest
 WEB_PORT=3000
 API_PORT=4000
-TRAEFIK_HOST=mvp.exemplo.com.br
+TRAEFIK_HOST=initiare.exycode.com.br
 TRAEFIK_CERTRESOLVER=letsencrypt
 TRAEFIK_NETWORK=proxy
-POSTGRES_DB=axiom_prime
+POSTGRES_DB=initiare_erp
 POSTGRES_USER=veridia
 POSTGRES_PASSWORD=trocar-antes-de-subir
-DATABASE_URL=postgresql://veridia:trocar-antes-de-subir@postgres:5432/axiom_prime?schema=public
+DATABASE_URL=postgresql://veridia:trocar-antes-de-subir@postgres:5432/initiare_erp?schema=public
 JWT_SECRET=trocar-por-um-segredo-longo-com-no-minimo-32-caracteres
-APP_ORIGIN=https://mvp.exemplo.com.br
+APP_ORIGIN=https://initiare.exycode.com.br
 SEED_ADMIN_EMAIL=admin@veridia.local
 SEED_ADMIN_PASSWORD=ChangeMe123!
 ```
 
 ## Segredos no GitHub
 
-No repositorio `ExyCode-Devs/axiom-prime`, configure:
+No repositorio `ExyCode-Devs/initiare_erp`, configure:
 
 - `HOSTINGER_HOST`
 - `HOSTINGER_PORT`
 - `HOSTINGER_USER`
 - `HOSTINGER_SSH_KEY`
-- `HOSTINGER_APP_DIR`
 
 Exemplo:
 
 ```text
-HOSTINGER_HOST=111.222.333.444
+HOSTINGER_HOST=31.97.175.6
 HOSTINGER_PORT=22
-HOSTINGER_USER=deploy
-HOSTINGER_APP_DIR=/home/deploy/apps/axiom-prime
+HOSTINGER_USER=ia-usuario
 ```
+
+O workflow usa `/source/initiare_erp` como pasta fixa de deploy.
 
 ## Primeira configuracao no servidor
 
@@ -134,7 +134,7 @@ docker network create proxy
 1. Criar o subdominio final do cliente.
 2. Apontar o registro `A` para o IP do VPS.
 3. Garantir que o Traefik do servidor esta responsavel por `80/443`.
-4. Usar o mesmo host em `TRAEFIK_HOST` e `APP_ORIGIN`.
+4. Usar o mesmo host em `TRAEFIK_HOST` e `APP_ORIGIN`, por exemplo `initiare.exycode.com.br`.
 
 ## O que a action faz
 
@@ -171,7 +171,7 @@ Para rollback:
 ## Comandos uteis no servidor
 
 ```bash
-cd /home/SEU_USUARIO/apps/axiom-prime
+cd /source/initiare_erp
 docker compose --env-file .env -f docker-compose.prod.yml config
 docker compose --env-file .env -f docker-compose.prod.yml up -d --build
 docker compose --env-file .env -f docker-compose.prod.yml ps
