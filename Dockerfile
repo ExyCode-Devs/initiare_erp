@@ -23,8 +23,9 @@ ENV PORT=3000
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/package-lock.json ./package-lock.json
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/server.prod.mjs ./server.prod.mjs
 COPY --from=builder /app/dist ./dist
 
 EXPOSE 3000
 
-CMD ["node", "dist/server/index.js"]
+CMD ["node", "server.prod.mjs"]
