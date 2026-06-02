@@ -1,4 +1,4 @@
-# Arquitetura do MVP Axiom
+# Arquitetura do MVP Initiare ERP
 
 ## Stack
 

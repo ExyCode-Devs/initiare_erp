@@ -68,7 +68,7 @@ export function buildApp() {
 
     return {
       status: "ok",
-      service: "axiom-prime-api",
+      service: "initiare_erp-api",
       timestamp: new Date().toISOString()
     };
   });

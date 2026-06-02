@@ -1,6 +1,6 @@
 services:
   web:
-    container_name: ${WEB_CONTAINER_NAME:-axiom-prime-web-dev}
+    container_name: ${WEB_CONTAINER_NAME:-initiare_erp-web-dev}
     build:
       context: .
       dockerfile: Dockerfile
@@ -29,7 +29,7 @@ services:
       start_period: 30s
 
   api:
-    container_name: ${API_CONTAINER_NAME:-axiom-prime-api-dev}
+    container_name: ${API_CONTAINER_NAME:-initiare_erp-api-dev}
     build:
       context: ./api
       dockerfile: Dockerfile
@@ -38,7 +38,7 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: ${API_PORT:-4000}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://veridia:veridia@postgres:5432/axiom_prime?schema=public}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://veridia:veridia@postgres:5432/initiare_erp?schema=public}
       JWT_SECRET: ${JWT_SECRET:-change-this-jwt-secret-before-production-123456}
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:${WEB_PORT:-3000}}
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@veridia.local}
@@ -63,11 +63,11 @@ services:
       start_period: 30s
 
   postgres:
-    container_name: ${DB_CONTAINER_NAME:-axiom-prime-postgres-dev}
+    container_name: ${DB_CONTAINER_NAME:-initiare_erp-postgres-dev}
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-axiom_prime}
+      POSTGRES_DB: ${POSTGRES_DB:-initiare_erp}
       POSTGRES_USER: ${POSTGRES_USER:-veridia}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-veridia}
     ports:
@@ -75,7 +75,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-veridia} -d ${POSTGRES_DB:-axiom_prime}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-veridia} -d ${POSTGRES_DB:-initiare_erp}"]
       interval: 10s
       timeout: 5s
       retries: 10
