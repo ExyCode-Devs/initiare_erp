@@ -4,10 +4,7 @@ import type { ReactNode } from "react";
 
 export function Card({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div
-      className={cn("rounded-xl border border-border bg-card shadow-elegant", className)}
-      {...props}
-    >
+    <div className={cn("rounded-xl border border-border bg-card shadow-elegant", className)} {...props}>
       {children}
     </div>
   );
@@ -136,9 +133,11 @@ export function Stat({
 }
 
 export function ConfidenceBar({ value }: { value: number }) {
-  const pct = Math.round(value * 100);
+  const normalized = value > 1 ? value / 100 : value;
+  const bounded = Math.max(0, Math.min(1, normalized));
+  const pct = Math.round(bounded * 100);
   const color =
-    value >= 0.9 ? "bg-success" : value >= 0.7 ? "bg-info" : value >= 0.5 ? "bg-warning" : "bg-destructive";
+    bounded >= 0.9 ? "bg-success" : bounded >= 0.7 ? "bg-info" : bounded >= 0.5 ? "bg-warning" : "bg-destructive";
 
   return (
     <div className="flex items-center gap-2 w-full">

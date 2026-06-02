@@ -15,6 +15,7 @@ O Axiom agora foi convertido para um MVP com:
 Arquivos principais:
 
 - `Dockerfile`
+- `.dockerignore`
 - `api/Dockerfile`
 - `docker-compose.yml`
 - `docker-compose.prod.yml`
@@ -34,7 +35,7 @@ Arquivos principais:
   - JWT
   - RBAC `ADMIN`, `ANALYST`, `VIEWER`
   - logs estruturados
-  - métricas em `/metrics`
+  - metricas em `/metrics`
   - endpoints em `/api/*`
 - `postgres`
   - persistencia do MVP
@@ -96,11 +97,30 @@ SEED_ADMIN_EMAIL=admin@veridia.local
 SEED_ADMIN_PASSWORD=ChangeMe123!
 ```
 
+## Segredos no GitHub
+
+No repositorio `ExyCode-Devs/axiom-prime`, configure:
+
+- `HOSTINGER_HOST`
+- `HOSTINGER_PORT`
+- `HOSTINGER_USER`
+- `HOSTINGER_SSH_KEY`
+- `HOSTINGER_APP_DIR`
+
+Exemplo:
+
+```text
+HOSTINGER_HOST=111.222.333.444
+HOSTINGER_PORT=22
+HOSTINGER_USER=deploy
+HOSTINGER_APP_DIR=/home/deploy/apps/axiom-prime
+```
+
 ## Primeira configuracao no servidor
 
-1. Garantir que Docker e Docker Compose plugin estao instalados.
-2. Garantir que a rede `proxy` do Traefik existe.
-3. Criar a pasta do app no servidor.
+1. Criar a pasta da app.
+2. Garantir que Docker e Docker Compose plugin estao instalados.
+3. Garantir que a rede `proxy` do Traefik existe.
 4. Colocar o `.env` de producao dentro da pasta do projeto.
 
 Se a rede ainda nao existir:
@@ -112,19 +132,9 @@ docker network create proxy
 ## DNS e subdominio
 
 1. Criar o subdominio final do cliente.
-2. Apontar o `A` para o IP do VPS.
+2. Apontar o registro `A` para o IP do VPS.
 3. Garantir que o Traefik do servidor esta responsavel por `80/443`.
 4. Usar o mesmo host em `TRAEFIK_HOST` e `APP_ORIGIN`.
-
-## Segredos no GitHub
-
-No repositorio `ExyCode-Devs/axiom-prime`, configure:
-
-- `HOSTINGER_HOST`
-- `HOSTINGER_PORT`
-- `HOSTINGER_USER`
-- `HOSTINGER_SSH_KEY`
-- `HOSTINGER_APP_DIR`
 
 ## O que a action faz
 
@@ -150,6 +160,14 @@ No deploy:
 4. fazer push para `main`
 5. acompanhar a action `Deploy Hostinger`
 
+## Rollback
+
+Para rollback:
+
+1. abrir `Actions`
+2. executar `Deploy Hostinger`
+3. informar um `git_ref` anterior
+
 ## Comandos uteis no servidor
 
 ```bash
@@ -160,6 +178,7 @@ docker compose --env-file .env -f docker-compose.prod.yml ps
 docker compose --env-file .env -f docker-compose.prod.yml logs -f web
 docker compose --env-file .env -f docker-compose.prod.yml logs -f api
 docker compose --env-file .env -f docker-compose.prod.yml logs -f postgres
+docker compose --env-file .env -f docker-compose.prod.yml down
 ```
 
 ## Acesso inicial

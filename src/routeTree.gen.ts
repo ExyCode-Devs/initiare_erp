@@ -22,6 +22,7 @@ import { Route as ContasAPagarRouteImport } from './routes/contas-a-pagar'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as ConciliacaoRouteImport } from './routes/conciliacao'
 import { Route as ClientesRouteImport } from './routes/clientes'
+import { Route as ChatRouteImport } from './routes/chat'
 import { Route as CentralIaRouteImport } from './routes/central-ia'
 import { Route as AutomacaoRouteImport } from './routes/automacao'
 import { Route as IndexRouteImport } from './routes/index'
@@ -91,6 +92,11 @@ const ClientesRoute = ClientesRouteImport.update({
   path: '/clientes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ChatRoute = ChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CentralIaRoute = CentralIaRouteImport.update({
   id: '/central-ia',
   path: '/central-ia',
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/automacao': typeof AutomacaoRoute
   '/central-ia': typeof CentralIaRoute
+  '/chat': typeof ChatRoute
   '/clientes': typeof ClientesRoute
   '/conciliacao': typeof ConciliacaoRoute
   '/configuracoes': typeof ConfiguracoesRoute
@@ -129,6 +136,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/automacao': typeof AutomacaoRoute
   '/central-ia': typeof CentralIaRoute
+  '/chat': typeof ChatRoute
   '/clientes': typeof ClientesRoute
   '/conciliacao': typeof ConciliacaoRoute
   '/configuracoes': typeof ConfiguracoesRoute
@@ -148,6 +156,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/automacao': typeof AutomacaoRoute
   '/central-ia': typeof CentralIaRoute
+  '/chat': typeof ChatRoute
   '/clientes': typeof ClientesRoute
   '/conciliacao': typeof ConciliacaoRoute
   '/configuracoes': typeof ConfiguracoesRoute
@@ -168,6 +177,7 @@ export interface FileRouteTypes {
     | '/'
     | '/automacao'
     | '/central-ia'
+    | '/chat'
     | '/clientes'
     | '/conciliacao'
     | '/configuracoes'
@@ -186,6 +196,7 @@ export interface FileRouteTypes {
     | '/'
     | '/automacao'
     | '/central-ia'
+    | '/chat'
     | '/clientes'
     | '/conciliacao'
     | '/configuracoes'
@@ -204,6 +215,7 @@ export interface FileRouteTypes {
     | '/'
     | '/automacao'
     | '/central-ia'
+    | '/chat'
     | '/clientes'
     | '/conciliacao'
     | '/configuracoes'
@@ -223,6 +235,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AutomacaoRoute: typeof AutomacaoRoute
   CentralIaRoute: typeof CentralIaRoute
+  ChatRoute: typeof ChatRoute
   ClientesRoute: typeof ClientesRoute
   ConciliacaoRoute: typeof ConciliacaoRoute
   ConfiguracoesRoute: typeof ConfiguracoesRoute
@@ -331,6 +344,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClientesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/chat': {
+      id: '/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof ChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/central-ia': {
       id: '/central-ia'
       path: '/central-ia'
@@ -359,6 +379,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AutomacaoRoute: AutomacaoRoute,
   CentralIaRoute: CentralIaRoute,
+  ChatRoute: ChatRoute,
   ClientesRoute: ClientesRoute,
   ConciliacaoRoute: ConciliacaoRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Search, Bell, Plus, Sparkles, Command, Plug, Globe, LogOut } from "lucide-react";
+import { Search, Bell, MessageSquare, Plus, Sparkles, Command, Plug, Globe, LogOut } from "lucide-react";
 import { motion } from "framer-motion";
 import { apiRequest } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
@@ -55,7 +55,7 @@ export function Topbar() {
         <button className="hidden lg:flex items-center gap-1.5 h-9 px-2.5 rounded-md text-[12px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
           <Plug className="size-3.5" />
           <span>
-            {data?.application.integrationsHealthy ?? 0}/{data?.application.integrationsTotal ?? 0} integrações
+            {data?.application.integrationsHealthy ?? 0}/{data?.application.integrationsTotal ?? 0} integracoes
           </span>
           <span className="size-1.5 rounded-full bg-success" />
         </button>
@@ -64,6 +64,14 @@ export function Topbar() {
           <Bell className="size-4" />
           <span className="absolute top-2 right-2 size-1.5 rounded-full bg-warning" />
         </button>
+
+        <a
+          href="/chat"
+          className="size-9 grid place-items-center rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Abrir chat com a IA"
+        >
+          <MessageSquare className="size-4" />
+        </a>
 
         <button className="flex items-center gap-1.5 h-9 px-3 rounded-md bg-foreground text-background text-[12.5px] font-medium hover:opacity-90 transition-opacity">
           <Plus className="size-3.5" />
