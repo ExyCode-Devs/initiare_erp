@@ -5,14 +5,24 @@
   "type": "module",
   "scripts": {
     "vite": "vite dev",
-    "smee:listen": "smee --url https://smee.io/An5zpPFo7qg6U8nj --target http://localhost:8080/api/webhooks/invoices",
-    "dev": "concurrently \"npm run vite\" \"npm run smee:listen\"",
-    "dev:smee": "cross-env SMEE_URL=https://smee.io/An5zpPFo7qg6U8nj npm run dev",
-    "build": "vite build",
+    "api:dev": "npm --prefix api run dev",
+    "smee:listen": "smee --url https://smee.io/An5zpPFo7qg6U8nj --target http://localhost:4000/api/webhooks/invoices",
+    "dev": "vite dev",
+    "dev:all": "concurrently \"npm run vite\" \"npm run api:dev\"",
+    "dev:smee": "concurrently \"npm run vite\" \"npm run api:dev\" \"npm run smee:listen\"",
+    "build": "npm run build:web && npm run build:api",
+    "build:web": "vite build && tsc --noEmit",
+    "build:api": "npm --prefix api run build",
     "build:dev": "vite build --mode development",
+    "start": "node .output/server/index.mjs",
     "preview": "vite preview",
+    "db:migrate": "npm --prefix api run prisma:migrate",
+    "db:seed": "npm --prefix api run prisma:seed",
     "lint": "eslint .",
     "format": "prettier --write ."
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",
