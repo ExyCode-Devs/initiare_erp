@@ -105,7 +105,6 @@ No repositorio `ExyCode-Devs/initiare_erp`, configure:
 - `HOSTINGER_PORT`
 - `HOSTINGER_USER`
 - `HOSTINGER_SSH_KEY`
-- `HOSTINGER_APP_DIR`
 
 Exemplo:
 
@@ -113,8 +112,9 @@ Exemplo:
 HOSTINGER_HOST=31.97.175.6
 HOSTINGER_PORT=22
 HOSTINGER_USER=ia-usuario
-HOSTINGER_APP_DIR=/opt/apps/initiare_erp
 ```
+
+O workflow usa `/source/initiare_erp` como pasta fixa de deploy.
 
 ## Primeira configuracao no servidor
 
@@ -171,7 +171,7 @@ Para rollback:
 ## Comandos uteis no servidor
 
 ```bash
-cd /opt/apps/initiare_erp
+cd /source/initiare_erp
 docker compose --env-file .env -f docker-compose.prod.yml config
 docker compose --env-file .env -f docker-compose.prod.yml up -d --build
 docker compose --env-file .env -f docker-compose.prod.yml ps

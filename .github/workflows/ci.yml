@@ -36,7 +36,7 @@ jobs:
         run: npm run build
 
       - name: Build web Docker image
-        run: docker build -t axiom-prime-web:ci .
+        run: docker build -t initiare_erp-web:ci .
 
       - name: Build api Docker image
-        run: docker build -t axiom-prime-api:ci ./api
+        run: docker build -t initiare_erp-api:ci ./api
