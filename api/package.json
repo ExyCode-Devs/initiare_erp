@@ -1,0 +1,34 @@
+{
+  "name": "axiom-prime-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "prisma generate && tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
+    "prisma:seed": "tsx prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.1.0",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/jwt": "^10.0.0",
+    "@prisma/client": "^6.10.1",
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^16.6.1",
+    "fastify": "^5.6.0",
+    "prom-client": "^15.1.3",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.10",
+    "pino-pretty": "^13.1.2",
+    "prisma": "^6.10.1",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}

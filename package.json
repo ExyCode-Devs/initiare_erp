@@ -5,10 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build && tsc --noEmit",
+    "build": "npm run build:web && npm run build:api",
+    "build:web": "vite build && tsc --noEmit",
+    "build:api": "npm --prefix api run build",
     "build:dev": "vite build --mode development",
     "start": "node .output/server/index.mjs",
     "preview": "vite preview",
+    "api:dev": "npm --prefix api run dev",
+    "db:migrate": "npm --prefix api run prisma:migrate",
+    "db:seed": "npm --prefix api run prisma:seed",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

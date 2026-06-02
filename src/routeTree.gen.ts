@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as RelatoriosRouteImport } from './routes/relatorios'
 import { Route as OperacoesRouteImport } from './routes/operacoes'
 import { Route as LogsIaRouteImport } from './routes/logs-ia'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as FornecedoresRouteImport } from './routes/fornecedores'
 import { Route as FluxosRouteImport } from './routes/fluxos'
 import { Route as ExecutivoRouteImport } from './routes/executivo'
@@ -38,6 +39,11 @@ const OperacoesRoute = OperacoesRouteImport.update({
 const LogsIaRoute = LogsIaRouteImport.update({
   id: '/logs-ia',
   path: '/logs-ia',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FornecedoresRoute = FornecedoresRouteImport.update({
@@ -114,6 +120,7 @@ export interface FileRoutesByFullPath {
   '/executivo': typeof ExecutivoRoute
   '/fluxos': typeof FluxosRoute
   '/fornecedores': typeof FornecedoresRoute
+  '/login': typeof LoginRoute
   '/logs-ia': typeof LogsIaRoute
   '/operacoes': typeof OperacoesRoute
   '/relatorios': typeof RelatoriosRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByTo {
   '/executivo': typeof ExecutivoRoute
   '/fluxos': typeof FluxosRoute
   '/fornecedores': typeof FornecedoresRoute
+  '/login': typeof LoginRoute
   '/logs-ia': typeof LogsIaRoute
   '/operacoes': typeof OperacoesRoute
   '/relatorios': typeof RelatoriosRoute
@@ -149,6 +157,7 @@ export interface FileRoutesById {
   '/executivo': typeof ExecutivoRoute
   '/fluxos': typeof FluxosRoute
   '/fornecedores': typeof FornecedoresRoute
+  '/login': typeof LoginRoute
   '/logs-ia': typeof LogsIaRoute
   '/operacoes': typeof OperacoesRoute
   '/relatorios': typeof RelatoriosRoute
@@ -168,6 +177,7 @@ export interface FileRouteTypes {
     | '/executivo'
     | '/fluxos'
     | '/fornecedores'
+    | '/login'
     | '/logs-ia'
     | '/operacoes'
     | '/relatorios'
@@ -185,6 +195,7 @@ export interface FileRouteTypes {
     | '/executivo'
     | '/fluxos'
     | '/fornecedores'
+    | '/login'
     | '/logs-ia'
     | '/operacoes'
     | '/relatorios'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
     | '/executivo'
     | '/fluxos'
     | '/fornecedores'
+    | '/login'
     | '/logs-ia'
     | '/operacoes'
     | '/relatorios'
@@ -220,6 +232,7 @@ export interface RootRouteChildren {
   ExecutivoRoute: typeof ExecutivoRoute
   FluxosRoute: typeof FluxosRoute
   FornecedoresRoute: typeof FornecedoresRoute
+  LoginRoute: typeof LoginRoute
   LogsIaRoute: typeof LogsIaRoute
   OperacoesRoute: typeof OperacoesRoute
   RelatoriosRoute: typeof RelatoriosRoute
@@ -246,6 +259,13 @@ declare module '@tanstack/react-router' {
       path: '/logs-ia'
       fullPath: '/logs-ia'
       preLoaderRoute: typeof LogsIaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/fornecedores': {
@@ -348,6 +368,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExecutivoRoute: ExecutivoRoute,
   FluxosRoute: FluxosRoute,
   FornecedoresRoute: FornecedoresRoute,
+  LoginRoute: LoginRoute,
   LogsIaRoute: LogsIaRoute,
   OperacoesRoute: OperacoesRoute,
   RelatoriosRoute: RelatoriosRoute,

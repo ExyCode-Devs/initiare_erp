@@ -22,9 +22,21 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            api/package-lock.json
 
-      - name: Install dependencies
+      - name: Install web dependencies
         run: npm ci
+
+      - name: Install api dependencies
+        run: npm --prefix api ci
 
       - name: Build application
         run: npm run build
+
+      - name: Build web Docker image
+        run: docker build -t axiom-prime-web:ci .
+
+      - name: Build api Docker image
+        run: docker build -t axiom-prime-api:ci ./api

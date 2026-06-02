@@ -28,8 +28,6 @@ jobs:
       REMOTE_PORT: ${{ secrets.HOSTINGER_PORT || '22' }}
       REMOTE_USER: ${{ secrets.HOSTINGER_USER }}
       REMOTE_APP_DIR: ${{ secrets.HOSTINGER_APP_DIR }}
-      REMOTE_APP_PORT: ${{ secrets.HOSTINGER_APP_PORT || '3000' }}
-      PM2_APP_NAME: axiom-prime
 
     steps:
       - name: Checkout
@@ -42,12 +40,24 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            api/package-lock.json
 
-      - name: Install dependencies
+      - name: Install web dependencies
         run: npm ci
+
+      - name: Install api dependencies
+        run: npm --prefix api ci
 
       - name: Build application
         run: npm run build
+
+      - name: Build web Docker image
+        run: docker build -t axiom-prime-web:ci .
+
+      - name: Build api Docker image
+        run: docker build -t axiom-prime-api:ci ./api
 
       - name: Validate required secrets
         run: |
@@ -89,4 +99,4 @@ jobs:
         run: |
           ssh -i ~/.ssh/hostinger_key -p "$REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST" \
             "cd '$REMOTE_APP_DIR' && chmod +x deploy/hostinger/deploy.sh && \
-            APP_DIR='$REMOTE_APP_DIR' PORT='$REMOTE_APP_PORT' PM2_APP_NAME='$PM2_APP_NAME' bash deploy/hostinger/deploy.sh"
+            APP_DIR='$REMOTE_APP_DIR' COMPOSE_FILE='docker-compose.prod.yml' bash deploy/hostinger/deploy.sh"
