@@ -4,7 +4,6 @@ import jwt from "@fastify/jwt";
 import { Prisma } from "@prisma/client";
 import Fastify from "fastify";
 import { env } from "./config/env.js";
-import authPlugin from "./plugins/auth.js";
 import monitoringPlugin from "./plugins/monitoring.js";
 import { prisma } from "./lib/prisma.js";
 import authRoutes from "./routes/auth.js";
@@ -60,7 +59,27 @@ export function buildApp() {
     secret: env.JWT_SECRET
   });
 
-  app.register(authPlugin);
+  app.decorate("authenticate", async (request, reply) => {
+    try {
+      await request.jwtVerify();
+    } catch {
+      reply.code(401).send({ message: "Unauthorized" });
+    }
+  });
+
+  app.decorate("authorize", (roles) => async (request, reply) => {
+    try {
+      await request.jwtVerify();
+    } catch {
+      reply.code(401).send({ message: "Unauthorized" });
+      return;
+    }
+
+    if (roles?.length && !roles.includes(request.user.role)) {
+      reply.code(403).send({ message: "Forbidden" });
+    }
+  });
+
   app.register(monitoringPlugin);
 
   app.get("/api/health", async () => {
