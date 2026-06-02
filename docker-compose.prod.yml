@@ -1,12 +1,7 @@
 services:
   web:
     container_name: ${WEB_CONTAINER_NAME:-initiare_erp-web}
-    image: ${WEB_IMAGE:-initiare_erp-web:latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        VITE_API_URL: /api
+    image: ${WEB_IMAGE:?set_WEB_IMAGE}:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file:
       - .env
@@ -49,17 +44,14 @@ services:
           "CMD-SHELL",
           "node -e \"fetch('http://127.0.0.1:${WEB_PORT:-3000}/login').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\"",
         ]
-      interval: 15s
+      interval: 30s
       timeout: 5s
-      retries: 10
+      retries: 5
       start_period: 30s
 
   api:
     container_name: ${API_CONTAINER_NAME:-initiare_erp-api}
-    image: ${API_IMAGE:-initiare_erp-api:latest}
-    build:
-      context: ./api
-      dockerfile: Dockerfile
+    image: ${API_IMAGE:?set_API_IMAGE}:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file:
       - .env
@@ -105,9 +97,9 @@ services:
           "CMD-SHELL",
           "node -e \"fetch('http://127.0.0.1:${API_PORT:-4000}/api/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\"",
         ]
-      interval: 15s
+      interval: 30s
       timeout: 5s
-      retries: 10
+      retries: 5
       start_period: 30s
 
   postgres:
@@ -124,9 +116,9 @@ services:
       - app
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-veridia} -d ${POSTGRES_DB:-initiare_erp}"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
-      retries: 10
+      retries: 5
       start_period: 10s
 
 volumes:

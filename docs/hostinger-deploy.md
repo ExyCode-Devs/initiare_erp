@@ -1,110 +1,91 @@
-# Deploy na Hostinger com Web + API + Postgres + Traefik
+# Deploy na Hostinger com pull de imagem
 
 ## Resumo
 
-O Initiare ERP agora foi convertido para um MVP com:
+`initiare_erp` em producao sobe com:
 
-1. `web` separado da `api`
-2. `api` Fastify com JWT, RBAC, Prisma e Postgres
-3. migrations versionadas em `api/prisma/migrations`
-4. seed inicial seguro para primeira subida
-5. compose local em `docker-compose.yml`
-6. compose de producao em `docker-compose.prod.yml`
-7. roteamento Traefik por host + `PathPrefix(/api)`
+1. `web`
+2. `api`
+3. `postgres`
+4. Traefik roteando `/` para `web` e `/api` para `api`
+
+Build pesado nao roda mais na VPS. O fluxo novo builda no GitHub, publica no Docker Hub, e o servidor apenas faz `pull` e `up`.
 
 Arquivos principais:
 
 - `Dockerfile`
-- `.dockerignore`
 - `api/Dockerfile`
-- `docker-compose.yml`
 - `docker-compose.prod.yml`
 - `deploy/hostinger/.env.production.example`
 - `deploy/hostinger/deploy.sh`
 - `.github/workflows/ci.yml`
 - `.github/workflows/deploy-hostinger.yml`
 
-## Arquitetura
+## Arquitetura de deploy
 
+- caminho canonico no servidor: `/source/initiare_erp`
 - `web`
-  - TanStack Start
-  - login
-  - dashboard e telas consumindo a API real
+  - frontend SSR
+  - porta interna `3000`
 - `api`
-  - Fastify
-  - JWT
-  - RBAC `ADMIN`, `ANALYST`, `VIEWER`
-  - logs estruturados
-  - metricas em `/metrics`
-  - endpoints em `/api/*`
+  - Fastify + Prisma
+  - porta interna `4000`
 - `postgres`
-  - persistencia do MVP
+  - interno
 
-Roteamento esperado em producao:
+## Rotas publicas esperadas
 
 - `https://SEU_HOST/` -> `web`
 - `https://SEU_HOST/api/*` -> `api`
 
-## Banco e migrations
+## Variaveis de producao
 
-O schema fica em:
-
-- `api/prisma/schema.prisma`
-
-A migration inicial fica em:
-
-- `api/prisma/migrations/0001_init/migration.sql`
-
-Comandos uteis:
-
-```bash
-npm --prefix api run prisma:migrate
-npm --prefix api run prisma:seed
-```
-
-O seed:
-
-- popula a base apenas se ela estiver vazia
-- nao apaga dados existentes em reinicios normais
-- so reseta tudo quando `SEED_RESET=true`
-
-## Variaveis de ambiente de producao
-
-No servidor, dentro da pasta do projeto, crie um `.env` com base em:
+Crie `/source/initiare_erp/.env` no servidor com base em:
 
 - `deploy/hostinger/.env.production.example`
 
-Variaveis principais:
+Exemplo:
 
-```bash
+```dotenv
 WEB_CONTAINER_NAME=initiare_erp-web
 API_CONTAINER_NAME=initiare_erp-api
 DB_CONTAINER_NAME=initiare_erp-postgres
-WEB_IMAGE=initiare_erp-web:latest
-API_IMAGE=initiare_erp-api:latest
+WEB_IMAGE=docker.io/exycode/initiare-erp
+API_IMAGE=docker.io/exycode/initiare-erp-api
+IMAGE_TAG=latest
 WEB_PORT=3000
 API_PORT=4000
 TRAEFIK_HOST=initiare.exycode.com.br
 TRAEFIK_CERTRESOLVER=letsencrypt
 TRAEFIK_NETWORK=proxy
+HOST=0.0.0.0
+HOSTNAME=0.0.0.0
+NODE_ENV=production
 POSTGRES_DB=initiare_erp
 POSTGRES_USER=veridia
 POSTGRES_PASSWORD=trocar-antes-de-subir
 DATABASE_URL=postgresql://veridia:trocar-antes-de-subir@postgres:5432/initiare_erp?schema=public
 JWT_SECRET=trocar-por-um-segredo-longo-com-no-minimo-32-caracteres
 APP_ORIGIN=https://initiare.exycode.com.br
-SEED_ADMIN_EMAIL=admin@veridia.local
+SEED_COMPANY_NAME=Initiare ERP
+SEED_COMPANY_DOMAIN=initiare.exycode.com.br
+SEED_ADMIN_EMAIL=admin@exycode.com.br
 SEED_ADMIN_PASSWORD=ChangeMe123!
+API_LOG_LEVEL=info
 ```
 
-## Segredos no GitHub
+## Segredos do GitHub
 
-No repositorio `ExyCode-Devs/initiare_erp`, configure:
+No repo `ExyCode-Devs/initiare_erp`, configurar:
 
 - `HOSTINGER_HOST`
 - `HOSTINGER_PORT`
 - `HOSTINGER_USER`
 - `HOSTINGER_SSH_KEY`
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_TOKEN`
+- `WEB_IMAGE`
+- `API_IMAGE`
 
 Exemplo:
 
@@ -112,80 +93,81 @@ Exemplo:
 HOSTINGER_HOST=31.97.175.6
 HOSTINGER_PORT=22
 HOSTINGER_USER=ia-usuario
+WEB_IMAGE=docker.io/exycode/initiare-erp
+API_IMAGE=docker.io/exycode/initiare-erp-api
 ```
-
-O workflow usa `/source/initiare_erp` como pasta fixa de deploy.
 
 ## Primeira configuracao no servidor
 
-1. Criar a pasta da app.
-2. Garantir que Docker e Docker Compose plugin estao instalados.
-3. Garantir que a rede `proxy` do Traefik existe.
-4. Colocar o `.env` de producao dentro da pasta do projeto.
+1. garantir pasta `/source/initiare_erp`
+2. garantir Docker e Docker Compose plugin
+3. garantir rede Docker `proxy`
+4. criar `.env` de producao
+5. garantir que imagens do Docker Hub estao acessiveis
 
-Se a rede ainda nao existir:
+Se a rede nao existir:
 
 ```bash
 docker network create proxy
 ```
 
-## DNS e subdominio
+## CI e deploy
 
-1. Criar o subdominio final do cliente.
-2. Apontar o registro `A` para o IP do VPS.
-3. Garantir que o Traefik do servidor esta responsavel por `80/443`.
-4. Usar o mesmo host em `TRAEFIK_HOST` e `APP_ORIGIN`, por exemplo `initiare.exycode.com.br`.
-
-## O que a action faz
-
-No CI:
+### CI
 
 1. instala dependencias de `web`
 2. instala dependencias de `api`
 3. roda `npm run build`
-4. valida `docker build` do `web`
-5. valida `docker build` da `api`
+4. valida `docker-compose.prod.yml`
+5. valida build Docker do `web`
+6. valida build Docker da `api`
 
-No deploy:
+### Deploy
 
-1. sincroniza o repo por `rsync`
-2. entra no servidor por SSH
-3. roda `docker compose --env-file .env -f docker-compose.prod.yml up -d --build --remove-orphans`
-
-## Primeiro deploy
-
-1. preencher o `.env` de producao
-2. configurar os secrets do GitHub
-3. garantir DNS apontando para o servidor
-4. fazer push para `main`
-5. acompanhar a action `Deploy Hostinger`
-
-## Rollback
-
-Para rollback:
-
-1. abrir `Actions`
-2. executar `Deploy Hostinger`
-3. informar um `git_ref` anterior
+1. builda imagem `web` no GitHub
+2. builda imagem `api` no GitHub
+3. faz push com tag do commit e `latest`
+4. sincroniza repo via `rsync`
+5. entra por SSH
+6. roda `docker compose pull web api`
+7. sobe `postgres`
+8. roda `prisma migrate deploy`
+9. roda bootstrap minimo quando banco estiver vazio
+10. sobe `web` e `api`
+11. remove worker antigo, se existir
 
 ## Comandos uteis no servidor
 
 ```bash
 cd /source/initiare_erp
 docker compose --env-file .env -f docker-compose.prod.yml config
-docker compose --env-file .env -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env -f docker-compose.prod.yml pull web api
+docker compose --env-file .env -f docker-compose.prod.yml up -d postgres
+docker compose --env-file .env -f docker-compose.prod.yml run --rm --no-deps api npx prisma migrate deploy
+docker compose --env-file .env -f docker-compose.prod.yml run --rm --no-deps api node dist/prisma/bootstrap.js
+docker compose --env-file .env -f docker-compose.prod.yml up -d web api --remove-orphans
 docker compose --env-file .env -f docker-compose.prod.yml ps
 docker compose --env-file .env -f docker-compose.prod.yml logs -f web
 docker compose --env-file .env -f docker-compose.prod.yml logs -f api
 docker compose --env-file .env -f docker-compose.prod.yml logs -f postgres
-docker compose --env-file .env -f docker-compose.prod.yml down
 ```
 
-## Acesso inicial
+## Validacao minima
 
-Usuario seed padrao:
+Depois do deploy:
 
-- e-mail: `admin@veridia.local`
-- senha: `ChangeMe123!`
+1. abrir `https://initiare.exycode.com.br/login`
+2. validar `https://initiare.exycode.com.br/api/health`
+3. testar login admin
+4. confirmar ausencia de dados demo de negocio
+5. abrir dashboard
 
-Troque isso antes de liberar acesso real para o cliente.
+## Bootstrap inicial
+
+Bootstrap usa valores do `.env`, mas roda so quando banco estiver vazio.
+
+Trocar antes de liberar cliente:
+
+- `SEED_ADMIN_PASSWORD`
+- `POSTGRES_PASSWORD`
+- `JWT_SECRET`

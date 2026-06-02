@@ -4,6 +4,7 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-$(pwd)}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-initiare_erp}"
 
 cd "$APP_DIR"
 
@@ -12,6 +13,15 @@ if [[ ! -f ".env" ]]; then
   exit 1
 fi
 
+compose() {
+  docker compose \
+    --project-name "$COMPOSE_PROJECT_NAME" \
+    --project-directory "$APP_DIR" \
+    --env-file .env \
+    -f "$COMPOSE_FILE" \
+    "$@"
+}
+
 TRAEFIK_NETWORK="$(
   grep -E '^TRAEFIK_NETWORK=' .env 2>/dev/null | tail -n 1 | cut -d '=' -f 2- | tr -d '\r'
 )"
@@ -19,4 +29,25 @@ TRAEFIK_NETWORK="$(
 docker network inspect "${TRAEFIK_NETWORK:-proxy}" >/dev/null 2>&1 || \
   docker network create "${TRAEFIK_NETWORK:-proxy}"
 
-docker compose --env-file .env -f "$COMPOSE_FILE" up -d --build --remove-orphans
+if [[ -n "${DOCKERHUB_USERNAME:-}" && -n "${DOCKERHUB_TOKEN:-}" ]]; then
+  printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+fi
+
+compose pull web api
+compose up -d postgres
+
+postgres_container="$(compose ps -q postgres)"
+if [[ -z "$postgres_container" ]]; then
+  echo "Failed to resolve postgres container id"
+  exit 1
+fi
+
+until [[ "$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}running{{end}}' "$postgres_container")" == "healthy" ]]; do
+  sleep 2
+done
+
+compose run --rm --no-deps api npx prisma migrate deploy
+compose run --rm --no-deps api node dist/prisma/bootstrap.js
+compose up -d web api --remove-orphans
+
+docker rm -f "${WORKER_CONTAINER_NAME:-initiare_erp-worker}" >/dev/null 2>&1 || true
