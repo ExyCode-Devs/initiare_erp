@@ -99,11 +99,12 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$HOSTINGER_SSH_KEY" > ~/.ssh/hostinger_key
           chmod 600 ~/.ssh/hostinger_key
-          ssh-keyscan -p "$REMOTE_PORT" "$REMOTE_HOST" >> ~/.ssh/known_hosts
+          touch ~/.ssh/known_hosts
+          ssh-keyscan -H -p "$REMOTE_PORT" "$REMOTE_HOST" >> ~/.ssh/known_hosts || true
 
       - name: Ensure remote directory exists
         run: |
-          ssh -i ~/.ssh/hostinger_key -p "$REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST" \
+          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/hostinger_key -p "$REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST" \
             "mkdir -p '$REMOTE_APP_DIR'"
 
       - name: Sync repository to server
@@ -119,7 +120,7 @@ jobs:
             --exclude '.env' \
             --exclude '.env.production' \
             --exclude '.env.production.local' \
-            -e "ssh -i ~/.ssh/hostinger_key -p $REMOTE_PORT" \
+            -e "ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/hostinger_key -p $REMOTE_PORT" \
             ./ "$REMOTE_USER@$REMOTE_HOST:$REMOTE_APP_DIR/"
 
       - name: Run remote deploy
@@ -130,7 +131,7 @@ jobs:
           printf -v REMOTE_DOCKERHUB_USERNAME '%q' "$DOCKERHUB_USERNAME"
           printf -v REMOTE_DOCKERHUB_TOKEN '%q' "$DOCKERHUB_TOKEN"
 
-          ssh -i ~/.ssh/hostinger_key -p "$REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST" \
+          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/hostinger_key -p "$REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST" \
             "cd '$REMOTE_APP_DIR' && chmod +x deploy/hostinger/deploy.sh && \
             APP_DIR='$REMOTE_APP_DIR' COMPOSE_FILE='docker-compose.prod.yml' \
             WEB_IMAGE=$REMOTE_WEB_IMAGE API_IMAGE=$REMOTE_API_IMAGE IMAGE_TAG=$REMOTE_IMAGE_TAG \
