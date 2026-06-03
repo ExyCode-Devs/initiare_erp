@@ -43,6 +43,88 @@ enum IntegrationStatus {
   AVAILABLE
 }
 
+enum InboxStatus {
+  RECEBIDO
+  PROCESSANDO
+  PROCESSADO
+  AGUARDANDO_VALIDACAO
+  APROVADO
+  REJEITADO
+  ERRO
+}
+
+enum AttachmentStatus {
+  PENDENTE
+  EXTRAIDO
+  ERRO
+}
+
+enum DraftStatus {
+  PENDENTE_REVISAO
+  APROVADO
+  REJEITADO
+}
+
+enum ConfidenceBand {
+  ALTA
+  MEDIA
+  BAIXA
+}
+
+enum ChangelogCategory {
+  NOVA_FUNCIONALIDADE
+  MELHORIA
+  CORRECAO
+  INTEGRACAO
+  IA
+  DASHBOARD
+}
+
+enum ChangelogStatus {
+  RASCUNHO
+  PUBLICADO
+}
+
+enum ExtractionRunStatus {
+  PENDENTE
+  SUCESSO
+  ERRO
+}
+
+enum JobRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum FinancialDirection {
+  CONTA_PAGAR
+  CONTA_RECEBER
+}
+
+enum ReviewAction {
+  EDIT
+  APPROVE
+  REJECT
+}
+
+enum AiEventOriginType {
+  ACTIVE_ACTIONS
+  INTERNAL
+}
+
+enum AiEventStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+}
+
+enum AiGatewayRunStatus {
+  PENDENTE
+  SUCESSO
+  ERRO
+}
+
 model Company {
   id                        String                       @id @default(cuid())
   name                      String
@@ -80,6 +162,17 @@ model Company {
   dreEntries                DreEntry[]
   insights                  Insight[]
   auditLogs                 AuditLog[]
+  aiEventSources            AiEventSource[]
+  aiGatewayRuns             AiGatewayRun[]
+  mailboxAccounts           MailboxAccount[]
+  inboundEmails             InboundEmail[]
+  emailAttachments          EmailAttachment[]
+  n8nExtractionRuns         N8nExtractionRun[]
+  financialDrafts           FinancialDraft[]
+  financialDraftReviews     FinancialDraftReview[]
+  processingJobRuns         ProcessingJobRun[]
+  changelogEntries          ChangelogEntry[]
+  changelogReads            ChangelogRead[]
 }
 
 model User {
@@ -93,6 +186,222 @@ model User {
   companyId    String
   company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   auditLogs    AuditLog[]
+  financialDraftReviews FinancialDraftReview[]
+  authoredChangelogEntries ChangelogEntry[]
+  changelogReads ChangelogRead[]
+}
+
+model MailboxAccount {
+  id             String   @id @default(cuid())
+  name           String
+  host           String
+  port           Int
+  tls            Boolean  @default(true)
+  username       String
+  passwordCipher String
+  fromFilter     String?
+  active         Boolean  @default(true)
+  lastSyncAt     DateTime?
+  lastError      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  companyId      String
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  inboundEmails  InboundEmail[]
+  jobRuns        ProcessingJobRun[]
+
+  @@index([companyId, active])
+}
+
+model InboundEmail {
+  id                String            @id @default(cuid())
+  externalMessageId String?           @unique
+  dedupeHash        String            @unique
+  sender            String
+  replyTo           String?
+  toRecipients      Json
+  ccRecipients      Json?
+  bccRecipients     Json?
+  subject           String
+  bodyText          String            @db.Text
+  bodyHtml          String?           @db.Text
+  rawHeaders        Json
+  originalEmlPath   String
+  receivedAt        DateTime
+  status            InboxStatus       @default(RECEBIDO)
+  processingError   String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  companyId         String
+  mailboxId         String
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  mailbox           MailboxAccount    @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  attachments       EmailAttachment[]
+  extractionRuns    N8nExtractionRun[]
+  financialDrafts   FinancialDraft[]
+
+  @@index([companyId, status, receivedAt])
+  @@index([mailboxId, receivedAt])
+}
+
+model EmailAttachment {
+  id              String           @id @default(cuid())
+  originalName    String
+  mimeType        String
+  sizeBytes       Int
+  storagePath     String
+  checksum        String
+  extractedText   String?          @db.Text
+  extractionMeta  Json?
+  status          AttachmentStatus @default(PENDENTE)
+  processingError String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  companyId       String
+  emailId         String
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  email           InboundEmail     @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, status])
+  @@index([emailId])
+}
+
+model N8nExtractionRun {
+  id               String              @id @default(cuid())
+  provider         String              @default("n8n")
+  workflowId       String?
+  requestPayload   Json
+  rawResponse      String?             @db.Text
+  parsedResponse   Json?
+  status           ExtractionRunStatus @default(PENDENTE)
+  errorMessage     String?
+  durationMs       Int?
+  startedAt        DateTime            @default(now())
+  completedAt      DateTime?
+  companyId        String
+  emailId          String
+  company          Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  email            InboundEmail        @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  financialDraft   FinancialDraft?
+
+  @@index([companyId, status, startedAt])
+  @@index([emailId])
+}
+
+model FinancialDraft {
+  id                   String             @id @default(cuid())
+  direction            FinancialDirection
+  partyName            String
+  cpfCnpj              String?
+  amount               Decimal?           @db.Decimal(14, 2)
+  dueDate              DateTime?
+  competence           String?
+  description          String             @db.Text
+  suggestedCategory    String?
+  finalCategory        String?
+  paymentMethod        String?
+  bankData             Json?
+  notes                String?            @db.Text
+  evidence             Json?
+  rawPayload           Json
+  confidenceScore      Float
+  confidenceBand       ConfidenceBand
+  status               DraftStatus        @default(PENDENTE_REVISAO)
+  sourceLabel          String             @default("AI event")
+  rejectionReason      String?
+  resultingResourceType String?
+  resultingResourceId  String?
+  reviewedAt           DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  companyId            String
+  sourceEmailId        String?
+  extractionRunId      String?            @unique
+  sourceEventId        String?
+  aiRunId              String?            @unique
+  company              Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceEmail          InboundEmail?      @relation(fields: [sourceEmailId], references: [id], onDelete: Cascade)
+  extractionRun        N8nExtractionRun?  @relation(fields: [extractionRunId], references: [id], onDelete: SetNull)
+  sourceEvent          AiEventSource?     @relation(fields: [sourceEventId], references: [id], onDelete: SetNull)
+  aiRun                AiGatewayRun?      @relation(fields: [aiRunId], references: [id], onDelete: SetNull)
+  reviews              FinancialDraftReview[]
+
+  @@index([companyId, status, confidenceBand])
+  @@index([sourceEmailId])
+  @@index([sourceEventId])
+}
+
+model FinancialDraftReview {
+  id          String       @id @default(cuid())
+  action      ReviewAction
+  note        String?
+  fieldDelta  Json?
+  createdAt   DateTime     @default(now())
+  companyId   String
+  draftId     String
+  userId      String
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  draft       FinancialDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([draftId])
+}
+
+model ProcessingJobRun {
+  id             String       @id @default(cuid())
+  runType        String
+  status         JobRunStatus @default(RUNNING)
+  fetchedCount   Int          @default(0)
+  processedCount Int          @default(0)
+  errorCount     Int          @default(0)
+  summary        Json?
+  errorMessage   String?
+  startedAt      DateTime     @default(now())
+  finishedAt     DateTime?
+  companyId      String
+  mailboxId      String?
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  mailbox        MailboxAccount? @relation(fields: [mailboxId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, startedAt])
+  @@index([mailboxId])
+}
+
+model ChangelogEntry {
+  id          String            @id @default(cuid())
+  title       String
+  description String           @db.Text
+  version     String
+  category    ChangelogCategory
+  status      ChangelogStatus   @default(RASCUNHO)
+  imageUrl    String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  publishedAt DateTime?
+  companyId   String
+  authorId    String
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  author      User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  reads       ChangelogRead[]
+
+  @@index([companyId, status, publishedAt])
+}
+
+model ChangelogRead {
+  id         String         @id @default(cuid())
+  firstSeenAt DateTime      @default(now())
+  readAt     DateTime?
+  createdAt  DateTime       @default(now())
+  companyId  String
+  entryId    String
+  userId     String
+  company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  entry      ChangelogEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([entryId, userId])
+  @@index([companyId, userId])
 }
 
 model Client {
@@ -337,4 +646,50 @@ model AuditLog {
   userId     String?
   company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model AiEventSource {
+  id              String            @id @default(cuid())
+  eventId         String
+  originType      AiEventOriginType
+  channel         String
+  sender          String?
+  subject         String?
+  summary         String?           @db.Text
+  attachmentsMeta Json?
+  rawPayload      Json
+  receivedAt      DateTime
+  status          AiEventStatus     @default(RECEIVED)
+  processingError String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  companyId       String
+  company         Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  aiRuns          AiGatewayRun[]
+  financialDrafts FinancialDraft[]
+
+  @@unique([companyId, eventId])
+  @@index([companyId, receivedAt])
+  @@index([companyId, status, createdAt])
+}
+
+model AiGatewayRun {
+  id             String             @id @default(cuid())
+  provider       String
+  requestPayload Json
+  rawResponse    String?            @db.Text
+  parsedResponse Json?
+  status         AiGatewayRunStatus @default(PENDENTE)
+  errorMessage   String?
+  durationMs     Int?
+  startedAt      DateTime           @default(now())
+  completedAt    DateTime?
+  companyId      String
+  eventSourceId  String
+  company        Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  eventSource    AiEventSource      @relation(fields: [eventSourceId], references: [id], onDelete: Cascade)
+  financialDraft FinancialDraft?
+
+  @@index([companyId, status, startedAt])
+  @@index([eventSourceId])
 }

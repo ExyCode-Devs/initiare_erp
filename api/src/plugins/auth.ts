@@ -19,6 +19,7 @@ const authPlugin: FastifyPluginAsync = async (app) => {
 
     if (roles?.length && !roles.includes(request.user.role)) {
       reply.code(403).send({ message: "Forbidden" });
+      return;
     }
   });
 };

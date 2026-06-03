@@ -1,16 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import {
   Activity,
   AlertTriangle,
   ArrowRight,
-  Bot,
   CheckCircle2,
   CircleAlert,
   Sparkles,
   Wallet,
-  Zap
+  Zap,
 } from "lucide-react";
 import {
   Area,
@@ -24,11 +23,12 @@ import {
   ResponsiveContainer,
   Tooltip,
   XAxis,
-  YAxis
+  YAxis,
 } from "recharts";
-import { Card, SectionHeader, Stat } from "@/components/app/primitives";
+import { Card, SectionHeader, Stat, StatusBadge } from "@/components/app/primitives";
 import { InlineError, InlineState } from "@/components/app/state";
 import { apiRequest } from "@/lib/api";
+import type { AutomationSummaryResponse } from "@/lib/api-types";
 import { formatCurrency } from "@/lib/format";
 
 type DashboardResponse = {
@@ -57,16 +57,31 @@ type DashboardResponse = {
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Dashboard · Veridia" }] }),
-  component: Dashboard
+  component: Dashboard,
 });
 
-const chartColors = ["var(--ai)", "var(--info)", "var(--warning)", "var(--chart-4)", "var(--success)", "var(--muted-foreground)"];
+const chartColors = [
+  "var(--ai)",
+  "var(--info)",
+  "var(--warning)",
+  "var(--chart-4)",
+  "var(--success)",
+  "var(--muted-foreground)",
+];
 
 function Dashboard() {
-  const { data, isLoading, isError } = useQuery({
+  const dashboardQuery = useQuery({
     queryKey: ["dashboard-overview"],
-    queryFn: () => apiRequest<DashboardResponse>("/dashboard/overview")
+    queryFn: () => apiRequest<DashboardResponse>("/dashboard/overview"),
   });
+  const automationQuery = useQuery({
+    queryKey: ["automation-summary"],
+    queryFn: () => apiRequest<AutomationSummaryResponse>("/automation/summary"),
+  });
+
+  const data = dashboardQuery.data;
+  const isLoading = dashboardQuery.isLoading || automationQuery.isLoading;
+  const isError = dashboardQuery.isError || automationQuery.isError;
 
   if (isLoading) {
     return (
@@ -105,31 +120,46 @@ function Dashboard() {
                 Bom dia, {data.hero.greetingName}.
               </h1>
               <p className="mt-2 text-[15px] text-muted-foreground text-balance">
-                A IA processou <span className="text-foreground font-medium tabular-nums">{data.hero.processedToday} operações</span>{" "}
-                automaticamente hoje. <span className="text-foreground font-medium">{data.hero.openExceptions} exceções</span> aguardam sua revisão.
+                A IA processou{" "}
+                <span className="text-foreground font-medium tabular-nums">
+                  {data.hero.processedToday} operacoes
+                </span>{" "}
+                automaticamente hoje.{" "}
+                <span className="text-foreground font-medium">
+                  {data.hero.openExceptions} excecoes
+                </span>{" "}
+                aguardam sua revisao.
               </p>
               <div className="mt-5 flex flex-wrap gap-2">
-                <button className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-foreground text-background text-[13px] font-medium hover:opacity-90">
-                  Revisar exceções <ArrowRight className="size-3.5" />
-                </button>
-                <button className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-border bg-card text-[13px] hover:bg-accent">
-                  <Bot className="size-3.5" /> Falar com a IA
-                </button>
+                <Link
+                  to="/validacao-financeira"
+                  className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-foreground text-background text-[13px] font-medium hover:opacity-90"
+                >
+                  Revisar excecoes <ArrowRight className="size-3.5" />
+                </Link>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-6 text-right shrink-0">
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Uptime IA</div>
-                <div className="text-[20px] font-semibold tabular-nums mt-1">{data.hero.uptime.toFixed(2)}%</div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Uptime IA
+                </div>
+                <div className="text-[20px] font-semibold tabular-nums mt-1">
+                  {data.hero.uptime.toFixed(2)}%
+                </div>
               </div>
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Integrações</div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Integracoes
+                </div>
                 <div className="text-[20px] font-semibold tabular-nums mt-1">
                   {data.hero.integrationsHealthy}/{data.hero.integrationsTotal}
                 </div>
               </div>
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Latência</div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Latencia
+                </div>
                 <div className="text-[20px] font-semibold tabular-nums mt-1">
                   {data.hero.latencyMs}
                   <span className="text-sm text-muted-foreground">ms</span>
@@ -140,24 +170,172 @@ function Dashboard() {
         </motion.section>
 
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Stat label="Conciliado automaticamente" value={`${data.stats.autoReconciliationRate}%`} delta={{ value: "+4.2pp", positive: true }} icon={<CheckCircle2 className="size-4" />} accent="ai" />
-          <Stat label="Processado pela IA" value={formatCurrency(data.stats.processedByAiAmount)} delta={{ value: "+18%", positive: true }} icon={<Wallet className="size-4" />} accent="info" />
-          <Stat label="Exceções em revisão" value={String(data.stats.openExceptions)} delta={{ value: "-23%", positive: true }} icon={<AlertTriangle className="size-4" />} accent="warning" />
-          <Stat label="Pagamentos programados" value={String(data.stats.scheduledPayments)} delta={{ value: "+12", positive: true }} icon={<Zap className="size-4" />} accent="success" />
+          <Stat
+            label="Conciliado automaticamente"
+            value={`${data.stats.autoReconciliationRate}%`}
+            delta={{ value: "+4.2pp", positive: true }}
+            icon={<CheckCircle2 className="size-4" />}
+            accent="ai"
+          />
+          <Stat
+            label="Processado pela IA"
+            value={formatCurrency(data.stats.processedByAiAmount)}
+            delta={{ value: "+18%", positive: true }}
+            icon={<Wallet className="size-4" />}
+            accent="info"
+          />
+          <Stat
+            label="Excecoes em revisao"
+            value={String(data.stats.openExceptions)}
+            delta={{ value: "-23%", positive: true }}
+            icon={<AlertTriangle className="size-4" />}
+            accent="warning"
+          />
+          <Stat
+            label="Pagamentos programados"
+            value={String(data.stats.scheduledPayments)}
+            delta={{ value: "+12", positive: true }}
+            icon={<Zap className="size-4" />}
+            accent="success"
+          />
         </section>
+
+        {automationQuery.data ? (
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <Card className="lg:col-span-2 p-5">
+              <SectionHeader
+                title="Automacao financeira"
+                desc="Active Actions envia AI events. App revisa e aprova."
+              />
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Stat
+                  label="Eventos totais"
+                  value={String(automationQuery.data.stats.totalEmails)}
+                  accent="ai"
+                />
+                <Stat
+                  label="Pendentes revisao"
+                  value={String(automationQuery.data.stats.pendingReview)}
+                  accent="warning"
+                />
+                <Stat
+                  label="Baixa confianca"
+                  value={String(automationQuery.data.stats.lowConfidence)}
+                  accent="info"
+                />
+                <Stat
+                  label="Erros pipeline"
+                  value={String(automationQuery.data.stats.errorCount)}
+                  accent="warning"
+                />
+              </div>
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="rounded-xl border border-border bg-background/60 p-4">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
+                    Ultimos eventos
+                  </div>
+                  <div className="space-y-2">
+                    {automationQuery.data.latestEmails.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-lg border border-border bg-card px-3 py-2"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="truncate text-[12px] font-medium">{item.subject}</div>
+                            <div className="truncate text-[11px] text-muted-foreground">
+                              {item.sender}
+                            </div>
+                          </div>
+                          <StatusBadge
+                            status={
+                              item.status === "FAILED" || item.status === "ERRO"
+                                ? "Excecao"
+                                : item.status === "RECEIVED" || item.status === "AGUARDANDO_VALIDACAO"
+                                  ? "Em revisao"
+                                  : "Processado"
+                            }
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border bg-background/60 p-4">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
+                    AI runs
+                  </div>
+                  <div className="space-y-2">
+                    {automationQuery.data.latestRuns.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-lg border border-border bg-card px-3 py-2"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-[12px] font-medium">{item.runType}</div>
+                          <StatusBadge
+                            status={
+                              item.status === "FAILED"
+                                ? "Excecao"
+                                : item.status === "RUNNING"
+                                  ? "Pendente"
+                                  : "Processado"
+                            }
+                          />
+                        </div>
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          fetched {item.fetchedCount} · ok {item.processedCount} · err{" "}
+                          {item.errorCount}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-5">
+              <SectionHeader title="Produto vivo" desc="Entregas ja disponiveis para cliente." />
+              <div className="space-y-3">
+                <div className="rounded-xl border border-border bg-background/60 p-4">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    Drafts aprovados
+                  </div>
+                  <div className="mt-2 text-[30px] font-semibold tabular-nums">
+                    {automationQuery.data.stats.approved}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border bg-background/60 p-4">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    Drafts rejeitados
+                  </div>
+                  <div className="mt-2 text-[30px] font-semibold tabular-nums">
+                    {automationQuery.data.stats.rejected}
+                  </div>
+                </div>
+                <Link
+                  to="/novidades"
+                  className="h-10 w-full rounded-md border border-border text-[12.5px] inline-flex items-center justify-center gap-1.5 hover:bg-accent"
+                >
+                  Abrir central de novidades
+                </Link>
+              </div>
+            </Card>
+          </section>
+        ) : null}
 
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card className="lg:col-span-2 p-5">
             <SectionHeader
               title="Fluxo de caixa · 12 meses"
-              desc="Entradas vs saídas projetadas com IA"
+              desc="Entradas vs saidas projetadas com IA"
               action={
                 <div className="flex gap-1.5 text-[11px]">
                   <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                     <span className="size-2 rounded-sm bg-ai" /> Entrada
                   </span>
                   <span className="inline-flex items-center gap-1.5 ml-3 text-muted-foreground">
-                    <span className="size-2 rounded-sm bg-info" /> Saída
+                    <span className="size-2 rounded-sm bg-info" /> Saida
                   </span>
                 </div>
               }
@@ -176,34 +354,83 @@ function Dashboard() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="month" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}k`} />
-                  <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
-                  <Area type="monotone" dataKey="entrada" stroke="var(--ai)" strokeWidth={2} fill="url(#entrada)" />
-                  <Area type="monotone" dataKey="saida" stroke="var(--info)" strokeWidth={2} fill="url(#saida)" />
+                  <XAxis
+                    dataKey="month"
+                    stroke="var(--muted-foreground)"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    stroke="var(--muted-foreground)"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(value) => `${value}k`}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--popover)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="entrada"
+                    stroke="var(--ai)"
+                    strokeWidth={2}
+                    fill="url(#entrada)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="saida"
+                    stroke="var(--info)"
+                    strokeWidth={2}
+                    fill="url(#saida)"
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </Card>
 
           <Card className="p-5">
-            <SectionHeader title="Despesas por categoria" desc="Distribuição mensal" />
+            <SectionHeader title="Despesas por categoria" desc="Distribuicao mensal" />
             <div className="h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={data.expensesByCategory} dataKey="value" innerRadius={55} outerRadius={85} paddingAngle={3} stroke="var(--background)" strokeWidth={2}>
+                  <Pie
+                    data={data.expensesByCategory}
+                    dataKey="value"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={3}
+                    stroke="var(--background)"
+                    strokeWidth={2}
+                  >
                     {data.expensesByCategory.map((_, index) => (
                       <Cell key={index} fill={chartColors[index % chartColors.length]} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--popover)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>
             <div className="grid grid-cols-2 gap-1.5 mt-3">
               {data.expensesByCategory.map((item, index) => (
                 <div key={item.name} className="flex items-center gap-1.5 text-[11.5px]">
-                  <span className="size-2 rounded-sm" style={{ background: chartColors[index % chartColors.length] }} />
+                  <span
+                    className="size-2 rounded-sm"
+                    style={{ background: chartColors[index % chartColors.length] }}
+                  />
                   <span className="text-muted-foreground">{item.name}</span>
                   <span className="ml-auto tabular-nums">{item.value}%</span>
                 </div>
@@ -214,16 +441,43 @@ function Dashboard() {
 
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card className="lg:col-span-2 p-5">
-            <SectionHeader title="Conciliação diária" desc="Últimos 14 dias · automática vs manual" />
+            <SectionHeader
+              title="Conciliacao diaria"
+              desc="Ultimos 14 dias · automatica vs manual"
+            />
             <div className="h-[220px] -ml-2">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.reconciliationDaily} barCategoryGap={6}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="day" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip cursor={{ fill: "var(--accent)" }} contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
+                  <XAxis
+                    dataKey="day"
+                    stroke="var(--muted-foreground)"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    stroke="var(--muted-foreground)"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip
+                    cursor={{ fill: "var(--accent)" }}
+                    contentStyle={{
+                      background: "var(--popover)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                  />
                   <Bar dataKey="auto" stackId="a" fill="var(--ai)" radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="manual" stackId="a" fill="var(--muted-foreground)" radius={[3, 3, 0, 0]} />
+                  <Bar
+                    dataKey="manual"
+                    stackId="a"
+                    fill="var(--muted-foreground)"
+                    radius={[3, 3, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -250,9 +504,15 @@ function Dashboard() {
                   className="flex items-start gap-2.5 px-5 py-2.5 hover:bg-accent/40"
                 >
                   <span className="text-muted-foreground/70 tabular-nums shrink-0">{item.t}</span>
-                  {item.type === "ok" ? <CheckCircle2 className="size-3.5 text-success shrink-0 mt-0.5" /> : null}
-                  {item.type === "warn" ? <CircleAlert className="size-3.5 text-warning shrink-0 mt-0.5" /> : null}
-                  {item.type === "err" ? <AlertTriangle className="size-3.5 text-destructive shrink-0 mt-0.5" /> : null}
+                  {item.type === "ok" ? (
+                    <CheckCircle2 className="size-3.5 text-success shrink-0 mt-0.5" />
+                  ) : null}
+                  {item.type === "warn" ? (
+                    <CircleAlert className="size-3.5 text-warning shrink-0 mt-0.5" />
+                  ) : null}
+                  {item.type === "err" ? (
+                    <AlertTriangle className="size-3.5 text-destructive shrink-0 mt-0.5" />
+                  ) : null}
                   <span className="text-foreground/90 leading-snug">{item.text}</span>
                 </motion.div>
               ))}

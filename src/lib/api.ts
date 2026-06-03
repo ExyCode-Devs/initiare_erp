@@ -45,7 +45,7 @@ type ApiRequestOptions = Omit<RequestInit, "body"> & {
   tokenOverride?: string | null;
 };
 
-export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+async function performRequest(path: string, options: ApiRequestOptions = {}) {
   const headers = new Headers(options.headers);
   headers.set("accept", "application/json");
 
@@ -63,7 +63,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     ...options,
     headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
 
   if (!response.ok) {
@@ -81,9 +81,31 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     throw new ApiError(message, response.status);
   }
 
+  return response;
+}
+
+export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+  const response = await performRequest(path, options);
+
   if (response.status === 204) {
     return undefined as T;
   }
 
   return (await response.json()) as T;
+}
+
+export async function apiDownload(path: string, options: ApiRequestOptions = {}) {
+  const response = await performRequest(path, {
+    ...options,
+    headers: {
+      ...options.headers,
+      accept: "*/*",
+    },
+  });
+
+  return {
+    blob: await response.blob(),
+    contentType: response.headers.get("content-type"),
+    fileName: response.headers.get("content-disposition"),
+  };
 }

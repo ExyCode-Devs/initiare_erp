@@ -125,6 +125,7 @@ function Excecoes() {
                           event.stopPropagation();
                           mutation.mutate({ id: item.id, status: "APPROVED" });
                         }}
+                        data-testid={`exception-approve-${item.id}`}
                         className="h-7 px-2.5 rounded-md bg-success/15 text-success border border-success/25 text-[11.5px] font-medium inline-flex items-center gap-1 hover:bg-success/20"
                       >
                         <Check className="size-3" /> Aprovar
@@ -137,6 +138,7 @@ function Excecoes() {
                           event.stopPropagation();
                           mutation.mutate({ id: item.id, status: "REJECTED" });
                         }}
+                        data-testid={`exception-reject-${item.id}`}
                         className="h-7 px-2.5 rounded-md border border-border text-[11.5px] text-muted-foreground hover:bg-accent inline-flex items-center gap-1"
                       >
                         <X className="size-3" /> Rejeitar
@@ -193,6 +195,7 @@ function Excecoes() {
               <div className="pt-3 border-t border-border flex items-center gap-2">
                 <button
                   onClick={() => mutation.mutate({ id: selected.id, status: "APPROVED" })}
+                  data-testid="exception-detail-approve"
                   className="flex-1 h-9 rounded-md bg-foreground text-background text-[12.5px] font-medium inline-flex items-center justify-center gap-1.5 hover:opacity-90"
                 >
                   <Check className="size-3.5" /> Aprovar sugestão

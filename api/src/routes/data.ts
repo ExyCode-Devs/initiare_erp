@@ -23,18 +23,6 @@ const logStatusMap: Record<LogStatus, string> = {
   ERR: "err"
 };
 
-const webhookSchema = z.object({
-  id: z.string().optional(),
-  fornecedor: z.string().min(2),
-  valor: z.coerce.number().positive(),
-  vencimento: z.iso.date(),
-  categoria: z.string().default("A classificar"),
-  status: z.enum(["Processado", "Em revisao", "Excecao", "Conciliado", "Pendente"]).default("Pendente"),
-  confianca: z.coerce.number().min(0).max(1).default(0.8),
-  origem: z.string().default("Webhook"),
-  responsavel: z.string().default("IA")
-});
-
 const exceptionDecisionSchema = z.object({
   status: z.enum(["OPEN", "APPROVED", "REJECTED"])
 });
@@ -48,66 +36,6 @@ function formatMoney(value: number) {
 }
 
 const dataRoutes: FastifyPluginAsync = async (app) => {
-  app.post("/webhooks/invoices", async (request) => {
-    const payload = webhookSchema.parse(request.body);
-    const company = await prisma.company.findFirstOrThrow();
-
-    const supplier = await prisma.supplier.upsert({
-      where: {
-        id: payload.id ?? `supplier-${payload.fornecedor.toLowerCase().replace(/\s+/g, "-")}`
-      },
-      update: {
-        name: payload.fornecedor,
-        category: payload.categoria,
-        lastTransaction: "agora"
-      },
-      create: {
-        id: payload.id ?? `supplier-${payload.fornecedor.toLowerCase().replace(/\s+/g, "-")}`,
-        companyId: company.id,
-        name: payload.fornecedor,
-        category: payload.categoria,
-        yearlySpend: payload.valor,
-        lastTransaction: "agora"
-      }
-    });
-
-    const payable = await prisma.accountPayable.create({
-      data: {
-        companyId: company.id,
-        supplierId: supplier.id,
-        amount: payload.valor,
-        dueDate: new Date(payload.vencimento),
-        category: payload.categoria,
-        status:
-          payload.status === "Processado"
-            ? "PROCESSADO"
-            : payload.status === "Em revisao"
-              ? "EM_REVISAO"
-              : payload.status === "Excecao"
-                ? "EXCECAO"
-                : payload.status === "Conciliado"
-                  ? "CONCILIADO"
-                  : "PENDENTE",
-        confidence: payload.confianca,
-        source: payload.origem,
-        assignee: payload.responsavel
-      },
-      include: {
-        supplier: true
-      }
-    });
-
-    return {
-      id: payable.id,
-      fornecedor: payable.supplier?.name ?? payload.fornecedor,
-      valor: Number(payable.amount),
-      vencimento: payable.dueDate.toISOString(),
-      categoria: payable.category,
-      status: financeStatusMap[payable.status],
-      confianca: payable.confidence
-    };
-  });
-
   app.register(async (protectedApp) => {
     protectedApp.addHook("preHandler", protectedApp.authenticate);
 

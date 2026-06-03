@@ -38,9 +38,18 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: ${API_PORT:-4000}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://veridia:veridia@postgres:5432/initiare_erp?schema=public}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-veridia}:${POSTGRES_PASSWORD:-veridia}@postgres:5432/${POSTGRES_DB:-initiare_erp}?schema=public
       JWT_SECRET: ${JWT_SECRET:-change-this-jwt-secret-before-production-123456}
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:${WEB_PORT:-3000}}
+      ACTIVE_ACTIONS_HMAC_SECRET: ${ACTIVE_ACTIONS_HMAC_SECRET:-change-this-active-actions-secret-min-32}
+      N8N_EXTRACTION_WEBHOOK_URL: ${N8N_EXTRACTION_WEBHOOK_URL:-}
+      N8N_EXTRACTION_BEARER_TOKEN: ${N8N_EXTRACTION_BEARER_TOKEN:-}
+      N8N_TIMEOUT_MS: ${N8N_TIMEOUT_MS:-30000}
+      MAILBOX_SECRET_KEY: ${MAILBOX_SECRET_KEY:-change-this-mailbox-secret-before-production-123456}
+      WORKER_POLL_INTERVAL_MS: ${WORKER_POLL_INTERVAL_MS:-60000}
+      WORKER_BATCH_SIZE: ${WORKER_BATCH_SIZE:-10}
+      INGESTION_STORAGE_ROOT: ${INGESTION_STORAGE_ROOT:-/data/financial-ingestion}
+      MAX_ATTACHMENT_SIZE_MB: ${MAX_ATTACHMENT_SIZE_MB:-15}
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@veridia.local}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-ChangeMe123!}
       SEED_COMPANY_NAME: ${SEED_COMPANY_NAME:-Acme Holdings}
@@ -51,6 +60,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ingestion_data:/data
     healthcheck:
       test:
         [
@@ -83,3 +94,4 @@ services:
 
 volumes:
   postgres_data:
+  ingestion_data:
