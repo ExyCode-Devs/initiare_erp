@@ -62,7 +62,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://veridia:veridia@postgres:5432/initiare_erp?schema=public}
       JWT_SECRET: ${JWT_SECRET:?set_JWT_SECRET}
       APP_ORIGIN: ${APP_ORIGIN:?set_APP_ORIGIN}
-      ACTIVE_ACTIONS_HMAC_SECRET: ${ACTIVE_ACTIONS_HMAC_SECRET:?set_ACTIVE_ACTIONS_HMAC_SECRET}
+      ACTIVE_ACTIONS_HMAC_SECRET: ${ACTIVE_ACTIONS_HMAC_SECRET:-change-this-active-actions-secret-before-production-123456}
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@veridia.local}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-ChangeMe123!}
       SEED_COMPANY_NAME: ${SEED_COMPANY_NAME:-Acme Holdings}

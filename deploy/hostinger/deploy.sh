@@ -13,6 +13,12 @@ if [[ ! -f ".env" ]]; then
   exit 1
 fi
 
+if ! grep -q '^ACTIVE_ACTIONS_HMAC_SECRET=' .env; then
+  echo "ACTIVE_ACTIONS_HMAC_SECRET missing in .env, writing safe placeholder"
+  printf '\nACTIVE_ACTIONS_HMAC_SECRET=%s\n' \
+    'change-this-active-actions-secret-before-production-123456' >> .env
+fi
+
 compose() {
   docker compose \
     --project-name "$COMPOSE_PROJECT_NAME" \
