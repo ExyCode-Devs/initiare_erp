@@ -9,10 +9,13 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ValidacaoFinanceiraRouteImport } from './routes/validacao-financeira'
 import { Route as RelatoriosRouteImport } from './routes/relatorios'
 import { Route as OperacoesRouteImport } from './routes/operacoes'
+import { Route as NovidadesRouteImport } from './routes/novidades'
 import { Route as LogsIaRouteImport } from './routes/logs-ia'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as InboxFinanceiroRouteImport } from './routes/inbox-financeiro'
 import { Route as FornecedoresRouteImport } from './routes/fornecedores'
 import { Route as FluxosRouteImport } from './routes/fluxos'
 import { Route as ExecutivoRouteImport } from './routes/executivo'
@@ -27,6 +30,11 @@ import { Route as CentralIaRouteImport } from './routes/central-ia'
 import { Route as AutomacaoRouteImport } from './routes/automacao'
 import { Route as IndexRouteImport } from './routes/index'
 
+const ValidacaoFinanceiraRoute = ValidacaoFinanceiraRouteImport.update({
+  id: '/validacao-financeira',
+  path: '/validacao-financeira',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RelatoriosRoute = RelatoriosRouteImport.update({
   id: '/relatorios',
   path: '/relatorios',
@@ -37,6 +45,11 @@ const OperacoesRoute = OperacoesRouteImport.update({
   path: '/operacoes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NovidadesRoute = NovidadesRouteImport.update({
+  id: '/novidades',
+  path: '/novidades',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LogsIaRoute = LogsIaRouteImport.update({
   id: '/logs-ia',
   path: '/logs-ia',
@@ -45,6 +58,11 @@ const LogsIaRoute = LogsIaRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InboxFinanceiroRoute = InboxFinanceiroRouteImport.update({
+  id: '/inbox-financeiro',
+  path: '/inbox-financeiro',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FornecedoresRoute = FornecedoresRouteImport.update({
@@ -127,10 +145,13 @@ export interface FileRoutesByFullPath {
   '/executivo': typeof ExecutivoRoute
   '/fluxos': typeof FluxosRoute
   '/fornecedores': typeof FornecedoresRoute
+  '/inbox-financeiro': typeof InboxFinanceiroRoute
   '/login': typeof LoginRoute
   '/logs-ia': typeof LogsIaRoute
+  '/novidades': typeof NovidadesRoute
   '/operacoes': typeof OperacoesRoute
   '/relatorios': typeof RelatoriosRoute
+  '/validacao-financeira': typeof ValidacaoFinanceiraRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -146,10 +167,13 @@ export interface FileRoutesByTo {
   '/executivo': typeof ExecutivoRoute
   '/fluxos': typeof FluxosRoute
   '/fornecedores': typeof FornecedoresRoute
+  '/inbox-financeiro': typeof InboxFinanceiroRoute
   '/login': typeof LoginRoute
   '/logs-ia': typeof LogsIaRoute
+  '/novidades': typeof NovidadesRoute
   '/operacoes': typeof OperacoesRoute
   '/relatorios': typeof RelatoriosRoute
+  '/validacao-financeira': typeof ValidacaoFinanceiraRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -166,10 +190,13 @@ export interface FileRoutesById {
   '/executivo': typeof ExecutivoRoute
   '/fluxos': typeof FluxosRoute
   '/fornecedores': typeof FornecedoresRoute
+  '/inbox-financeiro': typeof InboxFinanceiroRoute
   '/login': typeof LoginRoute
   '/logs-ia': typeof LogsIaRoute
+  '/novidades': typeof NovidadesRoute
   '/operacoes': typeof OperacoesRoute
   '/relatorios': typeof RelatoriosRoute
+  '/validacao-financeira': typeof ValidacaoFinanceiraRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -187,10 +214,13 @@ export interface FileRouteTypes {
     | '/executivo'
     | '/fluxos'
     | '/fornecedores'
+    | '/inbox-financeiro'
     | '/login'
     | '/logs-ia'
+    | '/novidades'
     | '/operacoes'
     | '/relatorios'
+    | '/validacao-financeira'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -206,10 +236,13 @@ export interface FileRouteTypes {
     | '/executivo'
     | '/fluxos'
     | '/fornecedores'
+    | '/inbox-financeiro'
     | '/login'
     | '/logs-ia'
+    | '/novidades'
     | '/operacoes'
     | '/relatorios'
+    | '/validacao-financeira'
   id:
     | '__root__'
     | '/'
@@ -225,10 +258,13 @@ export interface FileRouteTypes {
     | '/executivo'
     | '/fluxos'
     | '/fornecedores'
+    | '/inbox-financeiro'
     | '/login'
     | '/logs-ia'
+    | '/novidades'
     | '/operacoes'
     | '/relatorios'
+    | '/validacao-financeira'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -245,14 +281,24 @@ export interface RootRouteChildren {
   ExecutivoRoute: typeof ExecutivoRoute
   FluxosRoute: typeof FluxosRoute
   FornecedoresRoute: typeof FornecedoresRoute
+  InboxFinanceiroRoute: typeof InboxFinanceiroRoute
   LoginRoute: typeof LoginRoute
   LogsIaRoute: typeof LogsIaRoute
+  NovidadesRoute: typeof NovidadesRoute
   OperacoesRoute: typeof OperacoesRoute
   RelatoriosRoute: typeof RelatoriosRoute
+  ValidacaoFinanceiraRoute: typeof ValidacaoFinanceiraRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/validacao-financeira': {
+      id: '/validacao-financeira'
+      path: '/validacao-financeira'
+      fullPath: '/validacao-financeira'
+      preLoaderRoute: typeof ValidacaoFinanceiraRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/relatorios': {
       id: '/relatorios'
       path: '/relatorios'
@@ -267,6 +313,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OperacoesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/novidades': {
+      id: '/novidades'
+      path: '/novidades'
+      fullPath: '/novidades'
+      preLoaderRoute: typeof NovidadesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/logs-ia': {
       id: '/logs-ia'
       path: '/logs-ia'
@@ -279,6 +332,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inbox-financeiro': {
+      id: '/inbox-financeiro'
+      path: '/inbox-financeiro'
+      fullPath: '/inbox-financeiro'
+      preLoaderRoute: typeof InboxFinanceiroRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/fornecedores': {
@@ -389,10 +449,13 @@ const rootRouteChildren: RootRouteChildren = {
   ExecutivoRoute: ExecutivoRoute,
   FluxosRoute: FluxosRoute,
   FornecedoresRoute: FornecedoresRoute,
+  InboxFinanceiroRoute: InboxFinanceiroRoute,
   LoginRoute: LoginRoute,
   LogsIaRoute: LogsIaRoute,
+  NovidadesRoute: NovidadesRoute,
   OperacoesRoute: OperacoesRoute,
   RelatoriosRoute: RelatoriosRoute,
+  ValidacaoFinanceiraRoute: ValidacaoFinanceiraRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

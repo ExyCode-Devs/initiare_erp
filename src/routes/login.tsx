@@ -79,6 +79,7 @@ function LoginPage() {
               <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3">
                 <Mail className="size-4 text-white/45" />
                 <input
+                  data-testid="login-email"
                   className="h-12 flex-1 bg-transparent outline-none text-sm"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
@@ -94,6 +95,7 @@ function LoginPage() {
               <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3">
                 <LockKeyhole className="size-4 text-white/45" />
                 <input
+                  data-testid="login-password"
                   className="h-12 flex-1 bg-transparent outline-none text-sm"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
@@ -113,6 +115,7 @@ function LoginPage() {
 
             <button
               type="submit"
+              data-testid="login-submit"
               className="w-full h-12 rounded-xl bg-white text-slate-950 text-sm font-medium hover:bg-white/90 transition-colors disabled:opacity-70"
               disabled={isSubmitting}
             >

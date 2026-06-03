@@ -3,6 +3,18 @@ import { z } from "zod";
 
 loadEnv();
 
+const emptyToUndefined = (value: unknown) => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
+};
+
+const optionalString = () => z.preprocess(emptyToUndefined, z.string().min(1).optional());
+const optionalEmail = () => z.preprocess(emptyToUndefined, z.email().optional());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   HOST: z.string().default("0.0.0.0"),
@@ -11,10 +23,24 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 chars"),
   APP_ORIGIN: z.string().default("http://localhost:3000"),
+  ACTIVE_ACTIONS_HMAC_SECRET: z.string().min(32, "ACTIVE_ACTIONS_HMAC_SECRET must be at least 32 chars"),
+  ACTIVE_ACTIONS_MAX_SKEW_MS: z.coerce.number().int().positive().default(300000),
+  N8N_EXTRACTION_WEBHOOK_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
+  N8N_EXTRACTION_BEARER_TOKEN: optionalString(),
+  N8N_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
+  MAILBOX_SECRET_KEY: z.preprocess(emptyToUndefined, z.string().min(32).optional()),
+  WORKER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(60000),
+  WORKER_BATCH_SIZE: z.coerce.number().int().positive().default(10),
+  INGESTION_STORAGE_ROOT: z.string().default("./data/financial-ingestion"),
+  MAX_ATTACHMENT_SIZE_MB: z.coerce.number().int().positive().default(15),
   SEED_COMPANY_NAME: z.string().default("Acme Holdings"),
   SEED_COMPANY_DOMAIN: z.string().default("app.veridia.io"),
   SEED_ADMIN_EMAIL: z.email().default("admin@veridia.local"),
   SEED_ADMIN_PASSWORD: z.string().min(8).default("ChangeMe123!"),
+  SEED_ANALYST_EMAIL: optionalEmail(),
+  SEED_ANALYST_PASSWORD: optionalString(),
+  SEED_VIEWER_EMAIL: optionalEmail(),
+  SEED_VIEWER_PASSWORD: optionalString(),
   METRICS_ENABLED: z
     .union([z.literal("true"), z.literal("false")])
     .default("true")

@@ -24,6 +24,7 @@ declare module "@fastify/jwt" {
 declare module "fastify" {
   interface FastifyRequest {
     startTime?: number;
+    rawBody?: string;
   }
 
   interface FastifyInstance {
