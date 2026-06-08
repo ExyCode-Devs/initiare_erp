@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { ErpEnvironment, ErpProvider, ErpSyncEntityType } from "@prisma/client";
 import { approveDraft, patchDraftFields, rejectDraft } from "../lib/draft-workflow.js";
+import { exportDraftToOmie } from "../lib/omie-export-service.js";
 import { prisma } from "../lib/prisma.js";
 
 function mapLegacySource(item: {
@@ -53,7 +55,19 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
       },
       include: {
         sourceEvent: true,
-        sourceEmail: true
+        sourceEmail: true,
+        erpSyncRecords: {
+          where: {
+            provider: ErpProvider.OMIE,
+            entityType: {
+              in: [ErpSyncEntityType.ACCOUNT_PAYABLE, ErpSyncEntityType.ACCOUNT_RECEIVABLE]
+            }
+          },
+          orderBy: {
+            updatedAt: "desc"
+          },
+          take: 1
+        }
       },
       orderBy: {
         createdAt: "desc"
@@ -95,6 +109,15 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
                 id: item.sourceEmail.id,
                 sender: item.sourceEmail.sender,
                 subject: item.sourceEmail.subject
+              },
+        omieSync:
+          item.erpSyncRecords[0] == null
+            ? null
+            : {
+                environment: item.erpSyncRecords[0].environment,
+                status: item.erpSyncRecords[0].status,
+                externalId: item.erpSyncRecords[0].externalId,
+                errorMessage: item.erpSyncRecords[0].errorMessage
               }
       }))
     };
@@ -130,6 +153,25 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
           orderBy: {
             createdAt: "desc"
           }
+        },
+        erpSyncRecords: {
+          where: {
+            provider: ErpProvider.OMIE
+          },
+          orderBy: {
+            updatedAt: "desc"
+          }
+        },
+        erpRequestLogs: {
+          where: {
+            connection: {
+              provider: ErpProvider.OMIE
+            }
+          },
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 15
         }
       }
     });
@@ -216,7 +258,29 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
         fieldDelta: review.fieldDelta,
         createdAt: review.createdAt.toISOString(),
         user: review.user
-      }))
+      })),
+      omieHistory: {
+        syncs: item.erpSyncRecords.map((record) => ({
+          id: record.id,
+          entityType: record.entityType,
+          environment: record.environment,
+          status: record.status,
+          externalId: record.externalId,
+          errorMessage: record.errorMessage,
+          syncedAt: record.syncedAt?.toISOString() ?? null,
+          createdAt: record.createdAt.toISOString()
+        })),
+        requests: item.erpRequestLogs.map((entry) => ({
+          id: entry.id,
+          endpoint: entry.endpoint,
+          method: entry.method,
+          httpStatus: entry.httpStatus,
+          operationStatus: entry.operationStatus,
+          friendlyError: entry.friendlyError,
+          technicalError: entry.technicalError,
+          createdAt: entry.createdAt.toISOString()
+        }))
+      }
     };
   });
 
@@ -286,6 +350,83 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
       };
     }
   );
+
+  app.post(
+    "/financial-drafts/:id/omie-export",
+    {
+      preHandler: app.authorize(["ADMIN", "ANALYST"])
+    },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const payload = z
+        .object({
+          environment: z.nativeEnum(ErpEnvironment).default(ErpEnvironment.HOMOLOG)
+        })
+        .parse(request.body ?? {});
+
+      return exportDraftToOmie({
+        companyId: request.user.companyId,
+        draftId: params.id,
+        environment: payload.environment,
+        triggeredByUserId: request.user.sub
+      });
+    }
+  );
+
+  app.get("/financial-drafts/:id/omie-history", async (request) => {
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
+
+    const draft = await prisma.financialDraft.findFirstOrThrow({
+      where: {
+        id: params.id,
+        companyId: request.user.companyId
+      },
+      include: {
+        erpSyncRecords: {
+          where: {
+            provider: ErpProvider.OMIE
+          },
+          orderBy: {
+            createdAt: "desc"
+          }
+        },
+        erpRequestLogs: {
+          where: {
+            connection: {
+              provider: ErpProvider.OMIE
+            }
+          },
+          orderBy: {
+            createdAt: "desc"
+          }
+        }
+      }
+    });
+
+    return {
+      draftId: draft.id,
+      syncs: draft.erpSyncRecords.map((record) => ({
+        id: record.id,
+        entityType: record.entityType,
+        environment: record.environment,
+        status: record.status,
+        externalId: record.externalId,
+        errorMessage: record.errorMessage,
+        syncedAt: record.syncedAt?.toISOString() ?? null,
+        createdAt: record.createdAt.toISOString()
+      })),
+      requests: draft.erpRequestLogs.map((entry) => ({
+        id: entry.id,
+        endpoint: entry.endpoint,
+        method: entry.method,
+        httpStatus: entry.httpStatus,
+        operationStatus: entry.operationStatus,
+        friendlyError: entry.friendlyError,
+        technicalError: entry.technicalError,
+        createdAt: entry.createdAt.toISOString()
+      }))
+    };
+  });
 
   app.post(
     "/financial-drafts/:id/reject",

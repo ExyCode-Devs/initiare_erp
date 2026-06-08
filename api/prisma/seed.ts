@@ -1,7 +1,9 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { env } from "../src/config/env.js";
 import { hashPassword } from "../src/lib/auth.js";
+import { encryptAsaasSecret } from "../src/lib/asaas-crypto.js";
 import { encryptMailboxSecret } from "../src/lib/mailbox-crypto.js";
+import { encryptOmieSecret } from "../src/lib/omie-crypto.js";
 import { persistStoredFile } from "../src/lib/storage.js";
 
 const prisma = new PrismaClient();
@@ -74,6 +76,10 @@ async function main() {
   }
 
   if (shouldReset) {
+    await prisma.erpWebhookEvent.deleteMany();
+    await prisma.erpRequestLog.deleteMany();
+    await prisma.erpSyncRecord.deleteMany();
+    await prisma.erpConnection.deleteMany();
     await prisma.changelogRead.deleteMany();
     await prisma.changelogEntry.deleteMany();
     await prisma.financialDraftReview.deleteMany();
@@ -792,6 +798,51 @@ async function main() {
       description: String(description),
       status: status as never,
     })),
+  });
+
+  await prisma.erpConnection.createMany({
+    data: [
+      {
+        companyId: company.id,
+        provider: "OMIE",
+        environment: "HOMOLOG",
+        baseUrl: "https://app.omie.com.br/api/v1",
+        enabled: true,
+        appKeyCipher: encryptOmieSecret("omie-homolog-app-key"),
+        appSecretCipher: encryptOmieSecret("omie-homolog-app-secret"),
+        lastHealthcheckStatus: "UNKNOWN"
+      },
+      {
+        companyId: company.id,
+        provider: "OMIE",
+        environment: "PRODUCTION",
+        baseUrl: "https://app.omie.com.br/api/v1",
+        enabled: false,
+        appKeyCipher: encryptOmieSecret("omie-prod-app-key"),
+        appSecretCipher: encryptOmieSecret("omie-prod-app-secret"),
+        lastHealthcheckStatus: "UNKNOWN"
+      },
+      {
+        companyId: company.id,
+        provider: "ASAAS",
+        environment: "SANDBOX",
+        baseUrl: "https://api-sandbox.asaas.com/v3",
+        enabled: true,
+        appKeyCipher: encryptAsaasSecret("$aact_hmlg_example"),
+        webhookAuthTokenCipher: encryptAsaasSecret("whsec_sandbox_example_12345678901234567890"),
+        lastHealthcheckStatus: "UNKNOWN"
+      },
+      {
+        companyId: company.id,
+        provider: "ASAAS",
+        environment: "PRODUCTION",
+        baseUrl: "https://api.asaas.com/v3",
+        enabled: false,
+        appKeyCipher: encryptAsaasSecret("$aact_prod_example"),
+        webhookAuthTokenCipher: encryptAsaasSecret("whsec_prod_example_1234567890123456789012"),
+        lastHealthcheckStatus: "UNKNOWN"
+      }
+    ]
   });
 
   await prisma.cashflowPoint.createMany({
@@ -1761,6 +1812,30 @@ async function main() {
       category: "DASHBOARD",
       status: "RASCUNHO",
     },
+  });
+
+  await prisma.changelogEntry.create({
+    data: {
+      companyId: company.id,
+      authorId: user.id,
+      title: "Integracao inicial com OMIE",
+      description: "Estrutura inicial da integracao com OMIE pronta para homologacao e export manual de drafts aprovados.",
+      version: "0.9.2",
+      category: "INTEGRACAO",
+      status: "RASCUNHO"
+    }
+  });
+
+  await prisma.changelogEntry.create({
+    data: {
+      companyId: company.id,
+      authorId: user.id,
+      title: "Integracao inicial com ASAAS",
+      description: "Sincronizacao inicial de clientes, cobrancas, pagamentos e webhooks do Asaas pronta para sandbox e producao.",
+      version: "0.9.3",
+      category: "INTEGRACAO",
+      status: "RASCUNHO"
+    }
   });
 
   await prisma.changelogRead.create({

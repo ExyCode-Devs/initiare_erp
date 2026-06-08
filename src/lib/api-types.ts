@@ -189,6 +189,12 @@ export interface FinancialDraftListResponse {
       sender: string;
       subject: string;
     } | null;
+    omieSync: {
+      environment: "HOMOLOG" | "PRODUCTION";
+      status: string;
+      externalId: string | null;
+      errorMessage: string | null;
+    } | null;
   }>;
 }
 
@@ -269,6 +275,111 @@ export interface FinancialDraftDetailResponse {
       name: string;
       email: string;
     };
+  }>;
+  omieHistory: {
+    syncs: Array<{
+      id: string;
+      entityType: string;
+      environment: "HOMOLOG" | "PRODUCTION";
+      status: string;
+      externalId: string | null;
+      errorMessage: string | null;
+      syncedAt: string | null;
+      createdAt: string;
+    }>;
+    requests: Array<{
+      id: string;
+      endpoint: string;
+      method: string;
+      httpStatus: number | null;
+      operationStatus: string;
+      friendlyError: string | null;
+      technicalError: string | null;
+      createdAt: string;
+    }>;
+  };
+}
+
+export interface OmieSettingsResponse {
+  provider: "OMIE";
+  environments: Array<{
+    id: string;
+    provider: "OMIE";
+    environment: "HOMOLOG" | "PRODUCTION";
+    baseUrl: string;
+    enabled: boolean;
+    hasAppKey: boolean;
+    hasAppSecret: boolean;
+    lastSyncAt: string | null;
+    lastHealthcheckAt: string | null;
+    lastHealthcheckStatus: "UNKNOWN" | "HEALTHY" | "ERROR";
+    lastError: string | null;
+  }>;
+}
+
+export interface AsaasSettingsResponse {
+  provider: "ASAAS";
+  environments: Array<{
+    id: string;
+    provider: "ASAAS";
+    environment: "SANDBOX" | "PRODUCTION";
+    baseUrl: string;
+    enabled: boolean;
+    hasApiKey: boolean;
+    hasWebhookToken: boolean;
+    lastSyncAt: string | null;
+    lastHealthcheckAt: string | null;
+    lastHealthcheckStatus: "UNKNOWN" | "HEALTHY" | "ERROR";
+    lastError: string | null;
+  }>;
+}
+
+export interface AsaasPaymentsResponse {
+  stats: {
+    charges: number;
+    paid: number;
+    overdue: number;
+    netReceived: number;
+    fees: number;
+    webhookEvents: number;
+    integrationErrors: number;
+  };
+  items: Array<{
+    id: string;
+    externalId: string;
+    customer: string;
+    amount: number;
+    netAmount: number | null;
+    fee: number | null;
+    dueDate: string | null;
+    paymentDate: string | null;
+    status: string;
+    billingType: string | null;
+    description: string | null;
+    invoiceUrl: string | null;
+    source: string;
+    webhookStatus: string | null;
+    webhookError: string | null;
+  }>;
+  latestWebhook: {
+    id: string;
+    eventType: string;
+    status: string;
+    errorMessage: string | null;
+    createdAt: string;
+  } | null;
+}
+
+export interface AsaasWebhooksResponse {
+  items: Array<{
+    id: string;
+    environment: "SANDBOX" | "PRODUCTION";
+    externalEventId: string;
+    eventType: string;
+    status: string;
+    errorMessage: string | null;
+    processedAt: string | null;
+    createdAt: string;
   }>;
 }
 

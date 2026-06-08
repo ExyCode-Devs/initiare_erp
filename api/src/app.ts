@@ -10,6 +10,7 @@ import { prisma } from "./lib/prisma.js";
 import authRoutes from "./routes/auth.js";
 import aiEventRoutes from "./routes/ai-events.js";
 import automationRoutes from "./routes/automation.js";
+import asaasRoutes from "./routes/asaas.js";
 import changelogRoutes from "./routes/changelog.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import dataRoutes from "./routes/data.js";
@@ -17,6 +18,7 @@ import financialDraftRoutes from "./routes/financial-drafts.js";
 import inboxRoutes from "./routes/inbox.js";
 import mailboxRoutes from "./routes/mailboxes.js";
 import monitoringRoutes from "./routes/monitoring.js";
+import omieRoutes from "./routes/omie.js";
 
 export function buildApp() {
   const app = Fastify({
@@ -127,6 +129,8 @@ export function buildApp() {
   app.register(mailboxRoutes, { prefix: "/api" });
   app.register(inboxRoutes, { prefix: "/api" });
   app.register(financialDraftRoutes, { prefix: "/api" });
+  app.register(omieRoutes, { prefix: "/api" });
+  app.register(asaasRoutes, { prefix: "/api" });
   app.register(automationRoutes, { prefix: "/api" });
   app.register(changelogRoutes, { prefix: "/api" });
   app.register(monitoringRoutes, { prefix: "/api/monitoring" });

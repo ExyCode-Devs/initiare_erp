@@ -53,6 +53,28 @@ type DashboardResponse = {
   reconciliationDaily: Array<{ day: string; auto: number; manual: number }>;
   aiActivity: Array<{ t: string; type: "ok" | "warn" | "err"; text: string }>;
   timeline: Array<{ label: string; value: string }>;
+  omie: {
+    exported: number;
+    success: number;
+    error: number;
+    blocked: number;
+    latest: Array<{
+      id: string;
+      status: string;
+      externalId: string | null;
+      syncedAt: string | null;
+      errorMessage: string | null;
+    }>;
+  };
+  asaas: {
+    charges: number;
+    paid: number;
+    overdue: number;
+    netReceived: number;
+    fees: number;
+    webhookEvents: number;
+    integrationErrors: number;
+  };
 };
 
 export const Route = createFileRoute("/")({
@@ -198,6 +220,70 @@ function Dashboard() {
             icon={<Zap className="size-4" />}
             accent="success"
           />
+        </section>
+
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Card className="lg:col-span-2 p-5">
+            <SectionHeader title="OMIE exportacoes" desc="Homologacao e producao auditadas no app." />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Stat label="Exportados" value={String(data.omie.exported)} accent="ai" />
+              <Stat label="Sucesso" value={String(data.omie.success)} accent="success" />
+              <Stat label="Erro" value={String(data.omie.error)} accent="warning" />
+              <Stat label="Bloqueados" value={String(data.omie.blocked)} accent="info" />
+            </div>
+          </Card>
+          <Card className="p-5">
+            <SectionHeader title="Ultimos OMIE" />
+            <div className="space-y-2">
+              {data.omie.latest.length ? (
+                data.omie.latest.slice(0, 4).map((item) => (
+                  <div key={item.id} className="rounded-lg border border-border bg-card px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[12px] font-medium">{item.externalId ?? "Sem ID externo"}</div>
+                      <StatusBadge status={item.status === "SUCCESS" ? "Processado" : item.status === "BLOCKED" ? "Em revisao" : "Excecao"} />
+                    </div>
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      {item.syncedAt ? new Date(item.syncedAt).toLocaleString("pt-BR") : "Sem sync"}
+                    </div>
+                    {item.errorMessage ? <div className="mt-1 text-[11px] text-destructive">{item.errorMessage}</div> : null}
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-lg border border-border bg-card px-3 py-2 text-[12px] text-muted-foreground">
+                  No OMIE exports yet.
+                </div>
+              )}
+            </div>
+          </Card>
+        </section>
+
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Card className="lg:col-span-2 p-5">
+            <SectionHeader title="ASAAS recebiveis" desc="Sync manual e monitoramento por webhook." />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Stat label="Cobrancas" value={String(data.asaas.charges)} accent="ai" />
+              <Stat label="Pagas" value={String(data.asaas.paid)} accent="success" />
+              <Stat label="Vencidas" value={String(data.asaas.overdue)} accent="warning" />
+              <Stat label="Liquido" value={formatCurrency(data.asaas.netReceived)} accent="info" />
+            </div>
+          </Card>
+          <Card className="p-5">
+            <SectionHeader title="ASAAS sinais" />
+            <div className="space-y-3">
+              <div className="rounded-xl border border-border bg-background/60 p-4">
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Taxas</div>
+                <div className="mt-2 text-[24px] font-semibold tabular-nums">{formatCurrency(data.asaas.fees)}</div>
+              </div>
+              <div className="rounded-xl border border-border bg-background/60 p-4">
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Webhooks</div>
+                <div className="mt-2 text-[24px] font-semibold tabular-nums">{data.asaas.webhookEvents}</div>
+              </div>
+              <div className="rounded-xl border border-border bg-background/60 p-4">
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Erros integracao</div>
+                <div className="mt-2 text-[24px] font-semibold tabular-nums">{data.asaas.integrationErrors}</div>
+              </div>
+            </div>
+          </Card>
         </section>
 
         {automationQuery.data ? (

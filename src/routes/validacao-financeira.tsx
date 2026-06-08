@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { CheckCircle2, FileText, Save, ShieldAlert, XCircle } from "lucide-react";
+import { CheckCircle2, FileText, Save, ShieldAlert, Upload, XCircle } from "lucide-react";
 import {
   Card,
   ConfidenceBar,
@@ -65,6 +65,9 @@ function humanStatus(status: string) {
   if (status === "BAIXA") return "Baixa";
   if (status === "RECEIVED" || status === "PENDENTE") return "Pendente";
   if (status === "PROCESSED" || status === "SUCESSO") return "Processado";
+  if (status === "SUCCESS") return "Processado";
+  if (status === "ERROR") return "Excecao";
+  if (status === "BLOCKED") return "Em revisao";
   if (status === "FAILED" || status === "ERRO") return "Excecao";
   return status;
 }
@@ -134,6 +137,7 @@ function ValidacaoFinanceiraPage() {
   const [directionFilter, setDirectionFilter] = useState("ALL");
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [omieEnvironment, setOmieEnvironment] = useState<"HOMOLOG" | "PRODUCTION">("HOMOLOG");
   const [formState, setFormState] = useState<DraftFormState>(emptyDraftForm);
 
   const listPath = useMemo(() => {
@@ -245,6 +249,17 @@ function ValidacaoFinanceiraPage() {
     onSuccess: refreshAll,
   });
 
+  const exportOmieMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/financial-drafts/${selectedDraftId}/omie-export`, {
+        method: "POST",
+        body: {
+          environment: omieEnvironment,
+        },
+      }),
+    onSuccess: refreshAll,
+  });
+
   const canReview = user?.role === "ADMIN" || user?.role === "ANALYST";
   const totals = useMemo(() => {
     const items = listQuery.data?.items ?? [];
@@ -275,6 +290,7 @@ function ValidacaoFinanceiraPage() {
   const detail = detailQuery.data;
   const attachments = detail ? normalizeAttachments(detail) : [];
   const runs = detail ? normalizeRuns(detail) : [];
+  const latestOmieSync = detail?.omieHistory.syncs[0] ?? null;
 
   return (
     <div className="max-w-[1480px] mx-auto px-6 py-8 space-y-6">
@@ -447,7 +463,7 @@ function ValidacaoFinanceiraPage() {
                   </div>
 
                   <div className="rounded-xl border border-border bg-background/60 p-4">
-                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">AI run</div>
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">AI run</div>
                     <div className="space-y-2">
                       {runs.length ? (
                         runs.map((run) => (
@@ -467,6 +483,64 @@ function ValidacaoFinanceiraPage() {
                       ) : (
                         <div className="rounded-lg border border-border bg-card px-3 py-2 text-[12px] text-muted-foreground">
                           No AI run data.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-border bg-background/60 p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="text-[11px] uppercase tracking-wider text-muted-foreground">OMIE</div>
+                        <div className="mt-1 text-[12px] text-muted-foreground">
+                          Export manual only after approval.
+                        </div>
+                      </div>
+                      {latestOmieSync ? <StatusBadge status={humanStatus(latestOmieSync.status)} /> : null}
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {(["HOMOLOG", "PRODUCTION"] as const).map((environment) => (
+                        <button
+                          key={environment}
+                          onClick={() => setOmieEnvironment(environment)}
+                          className={cn(
+                            "h-8 px-2.5 rounded-md border text-[12px]",
+                            omieEnvironment === environment ? "border-ai/40 bg-ai/10 text-ai" : "border-border hover:bg-accent"
+                          )}
+                        >
+                          {environment === "HOMOLOG" ? "Homolog" : "Prod"}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="mt-3 rounded-lg border border-border bg-card px-3 py-3 text-[12px]">
+                      <div>Status atual: {latestOmieSync ? humanStatus(latestOmieSync.status) : "Sem exportacao"}</div>
+                      <div className="mt-1 text-muted-foreground">
+                        ID externo: {latestOmieSync?.externalId ?? "-"}
+                      </div>
+                      {latestOmieSync?.errorMessage ? (
+                        <div className="mt-2 text-destructive">{latestOmieSync.errorMessage}</div>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-3 space-y-2">
+                      {detail.omieHistory.requests.length ? (
+                        detail.omieHistory.requests.slice(0, 4).map((entry) => (
+                          <div key={entry.id} className="rounded-lg border border-border bg-card px-3 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-[12px] font-medium">{entry.method} {entry.endpoint.split("/api/v1/")[1] ?? entry.endpoint}</div>
+                              <StatusBadge status={humanStatus(entry.operationStatus)} />
+                            </div>
+                            <div className="mt-1 text-[11px] text-muted-foreground">
+                              {formatDateTime(entry.createdAt)} {entry.httpStatus ? `· HTTP ${entry.httpStatus}` : ""}
+                            </div>
+                            {entry.friendlyError ? <div className="mt-1 text-[11px] text-destructive">{entry.friendlyError}</div> : null}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-lg border border-border bg-card px-3 py-2 text-[12px] text-muted-foreground">
+                          No OMIE request history.
                         </div>
                       )}
                     </div>
@@ -499,6 +573,13 @@ function ValidacaoFinanceiraPage() {
                   </button>
                   <button onClick={() => approveMutation.mutate()} disabled={!canReview || approveMutation.isPending} data-testid="draft-approve-button" className="h-9 px-3 rounded-md bg-foreground text-background text-[12.5px] font-medium inline-flex items-center gap-1.5 hover:opacity-90 disabled:opacity-60">
                     <CheckCircle2 className="size-3.5" /> Aprovar
+                  </button>
+                  <button
+                    onClick={() => exportOmieMutation.mutate()}
+                    disabled={!canReview || exportOmieMutation.isPending || detail.status !== "APROVADO"}
+                    className="h-9 px-3 rounded-md border border-ai/30 text-ai text-[12.5px] inline-flex items-center gap-1.5 hover:bg-ai/5 disabled:opacity-60"
+                  >
+                    <Upload className="size-3.5" /> Criar no OMIE
                   </button>
                   <button onClick={() => rejectMutation.mutate()} disabled={!canReview || rejectMutation.isPending || rejectReason.trim().length < 3} data-testid="draft-reject-button" className="h-9 px-3 rounded-md border border-destructive/30 text-destructive text-[12.5px] inline-flex items-center gap-1.5 hover:bg-destructive/5 disabled:opacity-60">
                     <XCircle className="size-3.5" /> Rejeitar

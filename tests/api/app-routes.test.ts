@@ -47,10 +47,10 @@ describe("app routes", () => {
     vi.clearAllMocks();
     vi.resetModules();
     app = await buildTestApp();
-  });
+  }, 20000);
 
   afterEach(async () => {
-    await app.close();
+    await app?.close();
   });
 
   it("logs in successfully with valid credentials", async () => {

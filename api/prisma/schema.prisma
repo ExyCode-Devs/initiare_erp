@@ -125,6 +125,47 @@ enum AiGatewayRunStatus {
   ERRO
 }
 
+enum ErpProvider {
+  OMIE
+  ASAAS
+}
+
+enum ErpEnvironment {
+  HOMOLOG
+  SANDBOX
+  PRODUCTION
+}
+
+enum ErpHealthStatus {
+  UNKNOWN
+  HEALTHY
+  ERROR
+}
+
+enum ErpSyncEntityType {
+  CLIENT
+  SUPPLIER
+  CATEGORY
+  CURRENT_ACCOUNT
+  ACCOUNT_PAYABLE
+  ACCOUNT_RECEIVABLE
+  CHARGE
+  PAYMENT_RECEIPT
+  FEE
+}
+
+enum ErpSyncStatus {
+  PENDING
+  SUCCESS
+  ERROR
+  BLOCKED
+}
+
+enum ErpOperationStatus {
+  SUCCESS
+  ERROR
+}
+
 model Company {
   id                        String                       @id @default(cuid())
   name                      String
@@ -173,6 +214,10 @@ model Company {
   processingJobRuns         ProcessingJobRun[]
   changelogEntries          ChangelogEntry[]
   changelogReads            ChangelogRead[]
+  erpConnections            ErpConnection[]
+  erpSyncRecords            ErpSyncRecord[]
+  erpRequestLogs            ErpRequestLog[]
+  erpWebhookEvents          ErpWebhookEvent[]
 }
 
 model User {
@@ -189,6 +234,8 @@ model User {
   financialDraftReviews FinancialDraftReview[]
   authoredChangelogEntries ChangelogEntry[]
   changelogReads ChangelogRead[]
+  triggeredErpRequestLogs ErpRequestLog[] @relation("ErpRequestTriggeredBy")
+  triggeredErpWebhookEvents ErpWebhookEvent[] @relation("ErpWebhookTriggeredBy")
 }
 
 model MailboxAccount {
@@ -325,6 +372,8 @@ model FinancialDraft {
   sourceEvent          AiEventSource?     @relation(fields: [sourceEventId], references: [id], onDelete: SetNull)
   aiRun                AiGatewayRun?      @relation(fields: [aiRunId], references: [id], onDelete: SetNull)
   reviews              FinancialDraftReview[]
+  erpSyncRecords       ErpSyncRecord[]
+  erpRequestLogs       ErpRequestLog[]
 
   @@index([companyId, status, confidenceBand])
   @@index([sourceEmailId])
@@ -646,6 +695,108 @@ model AuditLog {
   userId     String?
   company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model ErpConnection {
+  id                   String          @id @default(cuid())
+  provider             ErpProvider
+  environment          ErpEnvironment
+  appKeyCipher         String?
+  appSecretCipher      String?
+  webhookAuthTokenCipher String?
+  baseUrl              String
+  enabled              Boolean         @default(false)
+  lastSyncAt           DateTime?
+  lastHealthcheckAt    DateTime?
+  lastHealthcheckStatus ErpHealthStatus @default(UNKNOWN)
+  lastError            String?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  companyId            String
+  company              Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  syncRecords          ErpSyncRecord[]
+  requestLogs          ErpRequestLog[]
+  webhookEvents        ErpWebhookEvent[]
+
+  @@unique([companyId, provider, environment])
+  @@index([companyId, provider, enabled])
+}
+
+model ErpSyncRecord {
+  id              String           @id @default(cuid())
+  provider        ErpProvider
+  environment     ErpEnvironment
+  entityType      ErpSyncEntityType
+  internalId      String
+  externalId      String?
+  status          ErpSyncStatus    @default(PENDING)
+  requestPayload  Json?
+  responsePayload Json?
+  errorMessage    String?
+  syncedAt        DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  companyId       String
+  connectionId    String
+  draftId         String?
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  connection      ErpConnection    @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  draft           FinancialDraft?  @relation(fields: [draftId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, provider, environment, entityType, internalId])
+  @@index([companyId, status, updatedAt])
+  @@index([draftId, updatedAt])
+}
+
+model ErpRequestLog {
+  id                String             @id @default(cuid())
+  method            String
+  endpoint          String
+  requestBody       Json?
+  responseBody      Json?
+  httpStatus        Int?
+  operationStatus   ErpOperationStatus
+  friendlyError     String?
+  technicalError    String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  companyId         String
+  connectionId      String
+  draftId           String?
+  triggeredByUserId String?
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  connection        ErpConnection      @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  draft             FinancialDraft?    @relation(fields: [draftId], references: [id], onDelete: SetNull)
+  triggeredByUser   User?              @relation("ErpRequestTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@index([draftId, createdAt])
+  @@index([connectionId, createdAt])
+}
+
+model ErpWebhookEvent {
+  id                String          @id @default(cuid())
+  provider          ErpProvider
+  environment       ErpEnvironment
+  externalEventId   String
+  eventType         String
+  headers           Json?
+  payload           Json
+  status            ErpSyncStatus   @default(PENDING)
+  errorMessage      String?
+  processedAt       DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  companyId         String
+  connectionId      String?
+  triggeredByUserId String?
+  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  connection        ErpConnection?  @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  triggeredByUser   User?           @relation("ErpWebhookTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, provider, environment, externalEventId])
+  @@index([companyId, provider, createdAt])
+  @@index([connectionId, createdAt])
 }
 
 model AiEventSource {

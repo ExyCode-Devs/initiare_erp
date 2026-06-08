@@ -1,4 +1,4 @@
-import type { FinanceStatus, LogStatus, Severity } from "@prisma/client";
+import type { ErpProvider, FinanceStatus, LogStatus, Severity } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
@@ -360,6 +360,54 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
         prisma.company.findUniqueOrThrow({ where: { id: request.user.companyId } }),
         prisma.integration.findMany({ where: { companyId: request.user.companyId }, orderBy: { name: "asc" } })
       ]);
+      const omieConnection = await prisma.erpConnection.findFirst({
+        where: {
+          companyId: request.user.companyId,
+          provider: "OMIE" as ErpProvider
+        },
+        orderBy: {
+          updatedAt: "desc"
+        }
+      });
+      const asaasConnection = await prisma.erpConnection.findFirst({
+        where: {
+          companyId: request.user.companyId,
+          provider: "ASAAS" as ErpProvider
+        },
+        orderBy: {
+          updatedAt: "desc"
+        }
+      });
+      const integrationItems = integrations.map((item) => ({
+        id: item.id,
+        name: item.name,
+        status: item.status === "CONNECTED" ? "connected" : "available",
+        desc: item.description
+      }));
+      const hasOmieCard = integrationItems.some((item) => item.name.toUpperCase() === "OMIE");
+      if (!hasOmieCard) {
+        integrationItems.unshift({
+          id: omieConnection?.id ?? "omie",
+          name: "OMIE",
+          status: omieConnection?.enabled ? "connected" : "available",
+          desc:
+            omieConnection == null
+              ? "ERP principal. Configure homologacao e producao."
+              : `ERP principal. Ultimo status ${omieConnection.lastHealthcheckStatus.toLowerCase()}.`
+        });
+      }
+      const hasAsaasCard = integrationItems.some((item) => item.name.toUpperCase() === "ASAAS");
+      if (!hasAsaasCard) {
+        integrationItems.unshift({
+          id: asaasConnection?.id ?? "asaas",
+          name: "ASAAS",
+          status: asaasConnection?.enabled ? "connected" : "available",
+          desc:
+            asaasConnection == null
+              ? "Recebiveis e webhooks. Configure sandbox e producao."
+              : `Recebiveis e webhooks. Ultimo status ${asaasConnection.lastHealthcheckStatus.toLowerCase()}.`
+        });
+      }
 
       return {
         sections: [
@@ -376,12 +424,7 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
           domain: company.domain,
           companiesCount: company.companiesCount
         },
-        integrations: integrations.map((item) => ({
-          id: item.id,
-          name: item.name,
-          status: item.status === "CONNECTED" ? "connected" : "available",
-          desc: item.description
-        })),
+        integrations: integrationItems,
         ai: [
           { l: "Modelo padrao", v: "veridia-finance-v3.2" },
           { l: "Threshold de autonomia", v: "90%", hint: "Decisoes abaixo disso vao para revisao humana" },
