@@ -4,6 +4,7 @@ import { ArrowDownLeft, Download, Plus, Search } from "lucide-react";
 import { Card, PageHeader, Stat, StatusBadge } from "@/components/app/primitives";
 import { InlineError, InlineState } from "@/components/app/state";
 import { apiRequest } from "@/lib/api";
+import type { AsaasPaymentsResponse } from "@/lib/api-types";
 import { formatDate } from "@/lib/format";
 
 type ReceivablesResponse = {
@@ -35,6 +36,10 @@ function Page() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["accounts-receivable"],
     queryFn: () => apiRequest<ReceivablesResponse>("/accounts-receivable")
+  });
+  const asaasQuery = useQuery({
+    queryKey: ["asaas-payments"],
+    queryFn: () => apiRequest<AsaasPaymentsResponse>("/asaas/payments")
   });
 
   if (isLoading) {
@@ -91,6 +96,61 @@ function Page() {
             ))}
           </tbody>
         </table>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border">
+          <div>
+            <div className="text-[13px] font-medium">ASAAS</div>
+            <div className="text-[12px] text-muted-foreground">Cobrancas, pagamentos e webhooks sincronizados.</div>
+          </div>
+          {asaasQuery.data?.latestWebhook ? (
+            <div className="text-[11px] text-muted-foreground">
+              Ultimo webhook {formatDate(asaasQuery.data.latestWebhook.createdAt)}
+            </div>
+          ) : null}
+        </div>
+
+        {asaasQuery.isLoading ? (
+          <div className="p-4"><InlineState label="Carregando dados do ASAAS..." /></div>
+        ) : asaasQuery.isError || !asaasQuery.data ? (
+          <div className="p-4"><InlineError label="Nao foi possivel carregar dados do ASAAS." /></div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3 px-4 py-4 border-b border-border">
+              <Stat label="Cobrancas" value={String(asaasQuery.data.stats.charges)} accent="ai" />
+              <Stat label="Pagas" value={String(asaasQuery.data.stats.paid)} accent="success" />
+              <Stat label="Vencidas" value={String(asaasQuery.data.stats.overdue)} accent="warning" />
+              <Stat label="Liquido" value={money.format(asaasQuery.data.stats.netReceived)} accent="info" />
+              <Stat label="Taxas" value={money.format(asaasQuery.data.stats.fees)} accent="warning" />
+              <Stat label="Erros" value={String(asaasQuery.data.stats.integrationErrors)} accent="warning" />
+            </div>
+            <table className="w-full text-[12.5px]">
+              <thead>
+                <tr className="text-[11px] uppercase tracking-wider text-muted-foreground border-b border-border">
+                  {["Cliente", "Valor", "Liquido", "Taxa", "Vencimento", "Pagamento", "Status", "Origem"].map((header) => <th key={header} className="text-left px-4 py-2 font-medium">{header}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {asaasQuery.data.items.map((item) => (
+                  <tr key={item.id} className="border-b border-border last:border-0 hover:bg-accent/40">
+                    <td className="px-4 py-3 font-medium">
+                      <div>{item.customer}</div>
+                      <div className="text-[11px] text-muted-foreground">{item.externalId}</div>
+                    </td>
+                    <td className="px-4 py-3 tabular-nums">{money.format(item.amount)}</td>
+                    <td className="px-4 py-3 tabular-nums">{money.format(item.netAmount ?? 0)}</td>
+                    <td className="px-4 py-3 tabular-nums">{money.format(item.fee ?? 0)}</td>
+                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{item.dueDate ? formatDate(item.dueDate) : "-"}</td>
+                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{item.paymentDate ? formatDate(item.paymentDate) : "-"}</td>
+                    <td className="px-4 py-3"><StatusBadge status={item.status} /></td>
+                    <td className="px-4 py-3 text-muted-foreground">{item.source}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
       </Card>
     </div>
   );
