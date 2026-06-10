@@ -195,28 +195,24 @@ function Dashboard() {
           <Stat
             label="Conciliado automaticamente"
             value={`${data.stats.autoReconciliationRate}%`}
-            delta={{ value: "+4.2pp", positive: true }}
             icon={<CheckCircle2 className="size-4" />}
             accent="ai"
           />
           <Stat
             label="Processado pela IA"
             value={formatCurrency(data.stats.processedByAiAmount)}
-            delta={{ value: "+18%", positive: true }}
             icon={<Wallet className="size-4" />}
             accent="info"
           />
           <Stat
             label="Excecoes em revisao"
             value={String(data.stats.openExceptions)}
-            delta={{ value: "-23%", positive: true }}
             icon={<AlertTriangle className="size-4" />}
             accent="warning"
           />
           <Stat
             label="Pagamentos programados"
             value={String(data.stats.scheduledPayments)}
-            delta={{ value: "+12", positive: true }}
             icon={<Zap className="size-4" />}
             accent="success"
           />

@@ -11,7 +11,6 @@ const dashboardRoutes: FastifyPluginAsync = async (app) => {
     const companyId = request.user.companyId;
 
     const [
-      company,
       payableItems,
       receivableItems,
       operations,
@@ -24,7 +23,6 @@ const dashboardRoutes: FastifyPluginAsync = async (app) => {
       asaasChargeSyncs,
       asaasWebhookEvents
     ] = await Promise.all([
-      prisma.company.findUniqueOrThrow({ where: { id: companyId } }),
       prisma.accountPayable.findMany({ where: { companyId } }),
       prisma.accountReceivable.findMany({ where: { companyId } }),
       prisma.operation.findMany({ where: { companyId }, orderBy: { dueDate: "desc" }, take: 42 }),
@@ -76,6 +74,14 @@ const dashboardRoutes: FastifyPluginAsync = async (app) => {
       .reduce((sum, item) => sum + Number(item.amount), 0);
     const reconciledOperations = operations.filter((item) => item.status === "CONCILIADO").length;
     const exceptionCount = exceptions.filter((item) => item.status === "OPEN").length;
+    const totalConnections = await prisma.erpConnection.count({ where: { companyId, enabled: true } });
+    const healthyConnections = await prisma.erpConnection.count({
+      where: {
+        companyId,
+        enabled: true,
+        lastHealthcheckStatus: "HEALTHY"
+      }
+    });
     const omieSuccess = omieSyncs.filter((item) => item.status === ErpSyncStatus.SUCCESS).length;
     const omieError = omieSyncs.filter((item) => item.status === ErpSyncStatus.ERROR).length;
     const omieBlocked = omieSyncs.filter((item) => item.status === ErpSyncStatus.BLOCKED).length;
@@ -100,13 +106,13 @@ const dashboardRoutes: FastifyPluginAsync = async (app) => {
     return {
       hero: {
         greetingName: request.user.name.split(" ")[0],
-        cycleLabel: company.aiCycleLabel,
+        cycleLabel: aiLogs[0] ? "ultima-execucao-registrada" : "aguardando-primeira-execucao",
         processedToday: operations.length,
         openExceptions: exceptionCount,
-        uptime: company.aiUptime,
-        integrationsHealthy: company.integrationsHealthy,
-        integrationsTotal: company.integrationsTotal,
-        latencyMs: company.latencyMs
+        uptime: aiLogs.length ? 100 : 0,
+        integrationsHealthy: healthyConnections,
+        integrationsTotal: totalConnections,
+        latencyMs: 0
       },
       stats: {
         autoReconciliationRate: operations.length
@@ -139,13 +145,13 @@ const dashboardRoutes: FastifyPluginAsync = async (app) => {
         text: item.action
       })),
       timeline: [
-        { label: "Tempo economizado (mes)", value: `${company.timeSavedHours}h` },
-        { label: "Economia operacional", value: `R$ ${Number(company.operationalSavings).toLocaleString("pt-BR")}` },
+        { label: "Tempo economizado (mes)", value: "0h" },
+        { label: "Economia operacional", value: "R$ 0" },
         {
           label: "Precisao IA",
           value: `${aiLogs.length ? Math.round((aiLogs.reduce((sum, item) => sum + item.confidence, 0) / aiLogs.length) * 100) : 0}%`
         },
-        { label: "Operacoes no mes", value: company.monthlyOperations.toLocaleString("pt-BR") }
+        { label: "Operacoes no mes", value: operations.length.toLocaleString("pt-BR") }
       ],
       totals: {
         totalPayables: currency(totalPayables)
@@ -193,13 +199,13 @@ const dashboardRoutes: FastifyPluginAsync = async (app) => {
     return {
       stats: {
         revenue,
-        revenueDelta: "+18.4%",
+        revenueDelta: "0%",
         ebitda: latestEbitda ? Number(latestEbitda.value) : 0,
-        ebitdaDelta: "+22.1%",
+        ebitdaDelta: "0%",
         expense,
-        expenseDelta: "+8.2%",
-        delinquencyRate: "2.1%",
-        delinquencyDelta: "-0.6pp"
+        expenseDelta: "0%",
+        delinquencyRate: "0%",
+        delinquencyDelta: "0pp"
       },
       cashflow: cashflow.map((item) => ({
         month: item.month,
@@ -223,10 +229,9 @@ const dashboardRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/ai/overview", async (request) => {
     const companyId = request.user.companyId;
-    const [automations, performancePoints, company, aiLogs] = await Promise.all([
+    const [automations, performancePoints, aiLogs] = await Promise.all([
       prisma.automation.findMany({ where: { companyId }, orderBy: { title: "asc" } }),
       prisma.performancePoint.findMany({ where: { companyId }, orderBy: { day: "asc" } }),
-      prisma.company.findUniqueOrThrow({ where: { id: companyId } }),
       prisma.aiLog.findMany({ where: { companyId } })
     ]);
 
@@ -236,16 +241,16 @@ const dashboardRoutes: FastifyPluginAsync = async (app) => {
 
     return {
       health: {
-        model: "veridia-finance-v3.2",
-        status: "saudavel"
+        model: aiLogs.length ? "configured" : "not-configured",
+        status: aiLogs.length ? "active" : "idle"
       },
       stats: {
-        operationsToday: company.monthlyOperations,
+        operationsToday: 0,
         accuracy: avgConfidence,
-        monthlySavings: Number(company.operationalSavings),
-        timeSavedHours: company.timeSavedHours,
+        monthlySavings: 0,
+        timeSavedHours: 0,
         activeAutomations: automations.filter((item) => item.status === "ACTIVE").length,
-        runningModels: 6
+        runningModels: 0
       },
       performance: performancePoints.map((item) => ({
         d: item.day,

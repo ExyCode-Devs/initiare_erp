@@ -43,6 +43,8 @@ function formatMoney(value: number) {
   return `R$ ${value.toLocaleString("pt-BR")}`;
 }
 
+const isProduction = process.env.NODE_ENV === "production";
+
 const dataRoutes: FastifyPluginAsync = async (app) => {
   app.register(async (protectedApp) => {
     protectedApp.addHook("preHandler", protectedApp.authenticate);
@@ -124,7 +126,7 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
         stats: {
           total: formatMoney(total),
           dueIn7Days: formatMoney(dueIn7Days.reduce((sum, item) => sum + Number(item.amount), 0)),
-          delinquencyRate: "2.1%",
+          delinquencyRate: "0%",
           receivedMonth: formatMoney(received)
         },
         items: items.map((item) => ({
@@ -330,6 +332,12 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
     );
 
     protectedApp.get("/flows", async (request) => {
+      if (isProduction) {
+        return {
+          items: []
+        };
+      }
+
       const items = await prisma.flow.findMany({
         where: { companyId: request.user.companyId },
         orderBy: { name: "asc" }
@@ -364,28 +372,19 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
     });
 
     protectedApp.get("/settings", async (request) => {
-      const [company, integrations] = await Promise.all([
+      const [company, integrations, erpConnections, aiLogCount, automationCount] = await Promise.all([
         prisma.company.findUniqueOrThrow({ where: { id: request.user.companyId } }),
-        prisma.integration.findMany({ where: { companyId: request.user.companyId }, orderBy: { name: "asc" } })
+        prisma.integration.findMany({ where: { companyId: request.user.companyId }, orderBy: { name: "asc" } }),
+        prisma.erpConnection.findMany({ where: { companyId: request.user.companyId } }),
+        prisma.aiLog.count({ where: { companyId: request.user.companyId } }),
+        prisma.automation.count({ where: { companyId: request.user.companyId } })
       ]);
-      const omieConnection = await prisma.erpConnection.findFirst({
-        where: {
-          companyId: request.user.companyId,
-          provider: "OMIE" as ErpProvider
-        },
-        orderBy: {
-          updatedAt: "desc"
-        }
-      });
-      const asaasConnection = await prisma.erpConnection.findFirst({
-        where: {
-          companyId: request.user.companyId,
-          provider: "ASAAS" as ErpProvider
-        },
-        orderBy: {
-          updatedAt: "desc"
-        }
-      });
+
+      const omieConnections = erpConnections.filter((item) => item.provider === "OMIE");
+      const asaasConnections = erpConnections.filter((item) => item.provider === "ASAAS");
+      const omieConnected = omieConnections.some((item) => item.enabled);
+      const asaasConnected = asaasConnections.some((item) => item.enabled);
+
       const integrationItems = integrations.map((item) => ({
         id: item.id,
         name: item.name,
@@ -395,25 +394,25 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
       const hasOmieCard = integrationItems.some((item) => item.name.toUpperCase() === "OMIE");
       if (!hasOmieCard) {
         integrationItems.unshift({
-          id: omieConnection?.id ?? "omie",
+          id: omieConnections[0]?.id ?? "omie",
           name: "OMIE",
-          status: omieConnection?.enabled ? "connected" : "available",
+          status: omieConnected ? "connected" : "available",
           desc:
-            omieConnection == null
+            omieConnections.length === 0
               ? "ERP principal. Configure homologacao e producao."
-              : `ERP principal. Ultimo status ${omieConnection.lastHealthcheckStatus.toLowerCase()}.`
+              : `${omieConnections.length} conexao(oes) OMIE registradas.`
         });
       }
       const hasAsaasCard = integrationItems.some((item) => item.name.toUpperCase() === "ASAAS");
       if (!hasAsaasCard) {
         integrationItems.unshift({
-          id: asaasConnection?.id ?? "asaas",
+          id: asaasConnections[0]?.id ?? "asaas",
           name: "ASAAS",
-          status: asaasConnection?.enabled ? "connected" : "available",
+          status: asaasConnected ? "connected" : "available",
           desc:
-            asaasConnection == null
+            asaasConnections.length === 0
               ? "Recebiveis e webhooks. Configure sandbox e producao."
-              : `Recebiveis e webhooks. Ultimo status ${asaasConnection.lastHealthcheckStatus.toLowerCase()}.`
+              : `${asaasConnections.length} conexao(oes) ASAAS registradas.`
         });
       }
 
@@ -437,10 +436,10 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
         },
         integrations: integrationItems,
         ai: [
-          { l: "Modelo padrao", v: "veridia-finance-v3.2" },
-          { l: "Threshold de autonomia", v: "90%", hint: "Decisoes abaixo disso vao para revisao humana" },
-          { l: "Modo agressivo", v: "Desativado", hint: "Permite a IA agir em casos de baixa confianca" },
-          { l: "Aprendizado continuo", v: "Ativado" }
+          { l: "Modelo padrao", v: aiLogCount > 0 ? "Configurado" : "Nao configurado" },
+          { l: "Threshold de autonomia", v: "Nao configurado", hint: "Defina quando a IA real estiver ativa." },
+          { l: "Modo agressivo", v: "Desativado", hint: "Nenhuma automacao de IA esta ativa sem pipeline configurado." },
+          { l: "Automações registradas", v: String(automationCount) }
         ]
       };
     });

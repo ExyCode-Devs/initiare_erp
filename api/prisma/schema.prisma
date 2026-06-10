@@ -195,14 +195,14 @@ model Company {
   replyToEmail              String?
   companiesCount            Int                          @default(1)
   country                   String                       @default("BR")
-  aiCycleLabel              String                       @default("ciclo #2.184")
-  aiUptime                  Float                        @default(99.98)
-  latencyMs                 Int                          @default(142)
-  integrationsHealthy       Int                          @default(8)
-  integrationsTotal         Int                          @default(8)
-  timeSavedHours            Int                          @default(284)
+  aiCycleLabel              String                       @default("aguardando-primeira-execucao")
+  aiUptime                  Float                        @default(0)
+  latencyMs                 Int                          @default(0)
+  integrationsHealthy       Int                          @default(0)
+  integrationsTotal         Int                          @default(0)
+  timeSavedHours            Int                          @default(0)
   operationalSavings        Decimal                      @db.Decimal(12, 2)
-  monthlyOperations         Int                          @default(8241)
+  monthlyOperations         Int                          @default(0)
   createdAt                 DateTime                     @default(now())
   updatedAt                 DateTime                     @updatedAt
   memberships               UserCompanyMembership[]

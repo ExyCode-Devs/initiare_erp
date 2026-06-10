@@ -1,3 +1,5 @@
+const isProduction = import.meta.env.PROD;
+
 export const navItems = [
   {
     group: "Operacional",
@@ -17,8 +19,8 @@ export const navItems = [
     items: [
       { label: "Central IA", to: "/central-ia", icon: "Sparkles" },
       { label: "Logs IA", to: "/logs-ia", icon: "Terminal" },
-      { label: "Fluxos", to: "/fluxos", icon: "Workflow" },
       { label: "Automacao", to: "/automacao", icon: "Zap" },
+      ...(!isProduction ? [{ label: "Fluxos", to: "/fluxos", icon: "Workflow" }] : []),
     ],
   },
   {

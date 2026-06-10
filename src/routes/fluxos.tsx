@@ -17,6 +17,10 @@ export const Route = createFileRoute("/fluxos")({
 });
 
 function Page() {
+  if (import.meta.env.PROD) {
+    return <div className="max-w-[1480px] mx-auto px-6 py-8"><InlineState label="Fluxos hidden in production." /></div>;
+  }
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ["flows"],
     queryFn: () => apiRequest<FlowsResponse>("/flows")
