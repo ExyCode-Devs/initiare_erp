@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { CheckCircle2, FileText, Save, ShieldAlert, Upload, XCircle } from "lucide-react";
+import { CheckCircle2, CopyMinus, FileText, RefreshCcw, Save, ShieldAlert, Upload, XCircle } from "lucide-react";
 import {
   Card,
   ConfidenceBar,
@@ -59,6 +59,13 @@ function formatDateTime(value: string | null) {
 }
 
 function humanStatus(status: string) {
+  if (status === "pending_review") return "Em revisao";
+  if (status === "edited") return "Editado";
+  if (status === "approved") return "Aprovado";
+  if (status === "rejected") return "Rejeitado";
+  if (status === "duplicated") return "Duplicado";
+  if (status === "draft_ai") return "Rascunho IA";
+  if (status === "draft_integration") return "Rascunho integracao";
   if (status === "PENDENTE_REVISAO") return "Em revisao";
   if (status === "APROVADO") return "Processado";
   if (status === "REJEITADO") return "Excecao";
@@ -264,6 +271,37 @@ function ValidacaoFinanceiraPage() {
         body: {
           environment: omieEnvironment,
         },
+    }),
+    onSuccess: refreshAll,
+  });
+
+  const markDuplicateMutation = useMutation({
+    mutationFn: (duplicateOfId: string) =>
+      apiRequest(`/financial-drafts/${selectedDraftId}/mark-duplicate`, {
+        method: "POST",
+        body: {
+          duplicateOfId,
+          note: rejectReason || "Marked as duplicate during review",
+        },
+      }),
+    onSuccess: refreshAll,
+  });
+
+  const undoDuplicateMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/financial-drafts/${selectedDraftId}/undo-duplicate`, {
+        method: "POST",
+      }),
+    onSuccess: refreshAll,
+  });
+
+  const reprocessMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/financial-drafts/${selectedDraftId}/request-reprocess`, {
+        method: "POST",
+        body: {
+          note: rejectReason || null,
+        },
       }),
     onSuccess: refreshAll,
   });
@@ -379,13 +417,18 @@ function ValidacaoFinanceiraPage() {
                       <span>{item.dueDate ? item.dueDate.slice(0, 10) : "Sem vencimento"}</span>
                     </div>
                   </div>
-                  <div className="space-y-1 text-right">
-                    <StatusBadge status={humanStatus(item.status)} />
-                    <StatusBadge status={humanStatus(item.confidenceBand)} />
+                    <div className="space-y-1 text-right">
+                      <StatusBadge status={humanStatus(item.status)} />
+                      <StatusBadge status={humanStatus(item.review.workflowStatus)} />
+                    </div>
                   </div>
-                </div>
-              </button>
-            ))}
+                  {item.review.blockers.length ? (
+                    <div className="mt-2 text-[11px] text-warning">
+                      {item.review.blockers[0]?.message}
+                    </div>
+                  ) : null}
+                </button>
+              ))}
           </div>
         </Card>
 
@@ -406,9 +449,20 @@ function ValidacaoFinanceiraPage() {
                 </div>
                 <div className="space-y-1 text-right">
                   <StatusBadge status={humanStatus(detail.status)} />
-                  <StatusBadge status={humanStatus(detail.confidenceBand)} />
+                  <StatusBadge status={humanStatus(detail.review.workflowStatus)} />
                 </div>
               </div>
+
+              {detail.review.blockers.length ? (
+                <div className="rounded-xl border border-warning/25 bg-warning/10 px-4 py-3">
+                  <div className="text-[11px] uppercase tracking-wider text-warning">Approval blockers</div>
+                  <div className="mt-2 space-y-1 text-[12px] text-warning">
+                    {detail.review.blockers.map((blocker) => (
+                      <div key={blocker.code}>{blocker.message}</div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="rounded-xl border border-border bg-background/60 p-4">
                 <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Confianca calculada</div>
@@ -478,9 +532,9 @@ function ValidacaoFinanceiraPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-border bg-background/60 p-4">
+                    <div className="rounded-xl border border-border bg-background/60 p-4">
                   <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">AI run</div>
-                    <div className="space-y-2">
+                      <div className="space-y-2">
                       {runs.length ? (
                         runs.map((run) => (
                           <div key={run.id} className="rounded-lg border border-border bg-card px-3 py-2">
@@ -496,15 +550,47 @@ function ValidacaoFinanceiraPage() {
                             ) : null}
                           </div>
                         ))
-                      ) : (
-                        <div className="rounded-lg border border-border bg-card px-3 py-2 text-[12px] text-muted-foreground">
-                          No AI run data.
-                        </div>
-                      )}
+                        ) : (
+                          <div className="rounded-lg border border-border bg-card px-3 py-2 text-[12px] text-muted-foreground">
+                            No AI run data.
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="rounded-xl border border-border bg-background/60 p-4">
+                    <div className="rounded-xl border border-border bg-background/60 p-4">
+                      <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Duplicate candidates</div>
+                      <div className="space-y-2">
+                        {detail.review.duplicateCandidates.length ? (
+                          detail.review.duplicateCandidates.map((candidate) => (
+                            <div key={candidate.id} className="rounded-lg border border-border bg-card px-3 py-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <div>
+                                  <div className="font-medium text-[12px]">{candidate.partyName}</div>
+                                  <div className="text-[11px] text-muted-foreground">
+                                    score {candidate.score} · {candidate.amount ? formatCurrency(candidate.amount) : "Sem valor"}
+                                  </div>
+                                </div>
+                                {canReview ? (
+                                  <button
+                                    onClick={() => markDuplicateMutation.mutate(candidate.id)}
+                                    className="h-8 px-2.5 rounded-md border border-warning/30 text-warning text-[12px] hover:bg-warning/5"
+                                  >
+                                    Marcar duplicado
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="rounded-lg border border-border bg-card px-3 py-2 text-[12px] text-muted-foreground">
+                            No duplicate candidates found.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-border bg-background/60 p-4">
                     <div className="flex items-center justify-between gap-2">
                       <div>
                         <div className="text-[11px] uppercase tracking-wider text-muted-foreground">OMIE</div>
@@ -593,8 +679,22 @@ function ValidacaoFinanceiraPage() {
                   <button onClick={() => saveMutation.mutate()} disabled={!canReview || saveMutation.isPending} data-testid="draft-save-button" className="h-9 px-3 rounded-md border border-border text-[12.5px] inline-flex items-center gap-1.5 hover:bg-accent disabled:opacity-60">
                     <Save className="size-3.5" /> Salvar ajustes
                   </button>
-                  <button onClick={() => approveMutation.mutate()} disabled={!canReview || approveMutation.isPending} data-testid="draft-approve-button" className="h-9 px-3 rounded-md bg-foreground text-background text-[12.5px] font-medium inline-flex items-center gap-1.5 hover:opacity-90 disabled:opacity-60">
+                  <button onClick={() => approveMutation.mutate()} disabled={!canReview || approveMutation.isPending || !detail.review.canApprove} data-testid="draft-approve-button" className="h-9 px-3 rounded-md bg-foreground text-background text-[12.5px] font-medium inline-flex items-center gap-1.5 hover:opacity-90 disabled:opacity-60">
                     <CheckCircle2 className="size-3.5" /> Aprovar
+                  </button>
+                  <button
+                    onClick={() => reprocessMutation.mutate()}
+                    disabled={!canReview || reprocessMutation.isPending}
+                    className="h-9 px-3 rounded-md border border-border text-[12.5px] inline-flex items-center gap-1.5 hover:bg-accent disabled:opacity-60"
+                  >
+                    <RefreshCcw className="size-3.5" /> Pedir reprocesso
+                  </button>
+                  <button
+                    onClick={() => undoDuplicateMutation.mutate()}
+                    disabled={!canReview || undoDuplicateMutation.isPending || detail.review.workflowStatus !== "duplicated"}
+                    className="h-9 px-3 rounded-md border border-info/30 text-info text-[12.5px] inline-flex items-center gap-1.5 hover:bg-info/5 disabled:opacity-60"
+                  >
+                    <CopyMinus className="size-3.5" /> Desfazer duplicado
                   </button>
                   <button
                     onClick={() => exportOmieMutation.mutate()}

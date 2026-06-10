@@ -1,7 +1,23 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { DraftRouteSource, DraftRoutingStatus, ErpEnvironment, ErpProvider, ErpSyncEntityType } from "@prisma/client";
-import { approveDraft, patchDraftFields, rejectDraft } from "../lib/draft-workflow.js";
+import {
+  DraftRouteSource,
+  DraftRoutingStatus,
+  ErpEnvironment,
+  ErpProvider,
+  ErpSyncEntityType
+} from "@prisma/client";
+import {
+  approveDraft,
+  getDraftApprovalBlockers,
+  getDraftWorkflowStatus,
+  listDraftDuplicateCandidates,
+  markDraftAsDuplicate,
+  patchDraftFields,
+  rejectDraft,
+  requestDraftReprocess,
+  undoDraftDuplicate
+} from "../lib/draft-workflow.js";
 import { getLegalEntityOrThrow } from "../lib/legal-entities.js";
 import { exportDraftToOmie } from "../lib/omie-export-service.js";
 import { prisma } from "../lib/prisma.js";
@@ -31,6 +47,16 @@ function mapLegacySource(item: {
     rawPayload: null,
     status: "PROCESSED",
     processingError: null
+  };
+}
+
+function buildReviewSnapshot(item: Parameters<typeof getDraftApprovalBlockers>[0]) {
+  const blockers = getDraftApprovalBlockers(item);
+
+  return {
+    workflowStatus: getDraftWorkflowStatus(item),
+    blockers,
+    canApprove: blockers.length === 0
   };
 }
 
@@ -79,6 +105,7 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
 
     return {
       items: items.map((item) => ({
+        review: buildReviewSnapshot(item),
         id: item.id,
         direction: item.direction,
         partyName: item.partyName,
@@ -185,6 +212,13 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
     });
 
     return {
+      review: {
+        ...buildReviewSnapshot(item),
+        duplicateCandidates: await listDraftDuplicateCandidates({
+          draftId: item.id,
+          companyId: request.user.companyId
+        })
+      },
       id: item.id,
       direction: item.direction,
       partyName: item.partyName,
@@ -353,10 +387,24 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
     {
       preHandler: app.authorize(["ADMIN", "ANALYST"])
     },
-    async (request) => {
+    async (request, reply) => {
       const params = z.object({ id: z.string().min(1) }).parse(request.params);
       const payload = z.object({ note: z.string().nullable().optional() }).parse(request.body ?? {});
-      const draft = await approveDraft({
+      const draft = await prisma.financialDraft.findFirstOrThrow({
+        where: {
+          id: params.id,
+          companyId: request.user.companyId
+        }
+      });
+      const blockers = getDraftApprovalBlockers(draft);
+      if (blockers.length > 0) {
+        reply.code(409);
+        return {
+          message: "Approval blocked by review rules.",
+          blockers
+        };
+      }
+      const approvedDraft = await approveDraft({
         draftId: params.id,
         companyId: request.user.companyId,
         user: {
@@ -368,8 +416,8 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
       });
 
       return {
-        id: draft.id,
-        status: draft.status
+        id: approvedDraft.id,
+        status: approvedDraft.status
       };
     }
   );
@@ -450,6 +498,89 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
       }))
     };
   });
+
+  app.post(
+    "/financial-drafts/:id/mark-duplicate",
+    {
+      preHandler: app.authorize(["ADMIN", "ANALYST"])
+    },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const payload = z
+        .object({
+          duplicateOfId: z.string().min(1),
+          note: z.string().nullable().optional()
+        })
+        .parse(request.body);
+
+      const draft = await markDraftAsDuplicate({
+        draftId: params.id,
+        companyId: request.user.companyId,
+        duplicateOfId: payload.duplicateOfId,
+        note: payload.note ?? null,
+        user: {
+          id: request.user.sub,
+          name: request.user.name,
+          email: request.user.email
+        }
+      });
+
+      return {
+        id: draft.id,
+        status: draft.status
+      };
+    }
+  );
+
+  app.post(
+    "/financial-drafts/:id/undo-duplicate",
+    {
+      preHandler: app.authorize(["ADMIN", "ANALYST"])
+    },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const draft = await undoDraftDuplicate({
+        draftId: params.id,
+        companyId: request.user.companyId,
+        user: {
+          id: request.user.sub,
+          name: request.user.name,
+          email: request.user.email
+        }
+      });
+
+      return {
+        id: draft.id,
+        status: draft.status
+      };
+    }
+  );
+
+  app.post(
+    "/financial-drafts/:id/request-reprocess",
+    {
+      preHandler: app.authorize(["ADMIN", "ANALYST"])
+    },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const payload = z.object({ note: z.string().nullable().optional() }).parse(request.body ?? {});
+      const draft = await requestDraftReprocess({
+        draftId: params.id,
+        companyId: request.user.companyId,
+        note: payload.note ?? null,
+        user: {
+          id: request.user.sub,
+          name: request.user.name,
+          email: request.user.email
+        }
+      });
+
+      return {
+        id: draft.id,
+        status: draft.status
+      };
+    }
+  );
 
   app.post(
     "/financial-drafts/:id/reject",

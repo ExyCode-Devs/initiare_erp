@@ -162,6 +162,14 @@ export interface InboxEmailDetailResponse {
 
 export interface FinancialDraftListResponse {
   items: Array<{
+    review: {
+      workflowStatus: string;
+      blockers: Array<{
+        code: string;
+        message: string;
+      }>;
+      canApprove: boolean;
+    };
     id: string;
     direction: string;
     partyName: string;
@@ -204,6 +212,22 @@ export interface FinancialDraftListResponse {
 }
 
 export interface FinancialDraftDetailResponse {
+  review: {
+    workflowStatus: string;
+    blockers: Array<{
+      code: string;
+      message: string;
+    }>;
+    canApprove: boolean;
+    duplicateCandidates: Array<{
+      id: string;
+      partyName: string;
+      amount: number | null;
+      dueDate: string | null;
+      status: string;
+      score: number;
+    }>;
+  };
   id: string;
   direction: string;
   partyName: string;

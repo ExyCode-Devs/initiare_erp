@@ -16,8 +16,14 @@ const prismaMock = {
 };
 
 const approveDraftMock = vi.fn();
+const getDraftApprovalBlockersMock = vi.fn();
+const getDraftWorkflowStatusMock = vi.fn();
+const listDraftDuplicateCandidatesMock = vi.fn();
+const markDraftAsDuplicateMock = vi.fn();
 const patchDraftFieldsMock = vi.fn();
 const rejectDraftMock = vi.fn();
+const requestDraftReprocessMock = vi.fn();
+const undoDraftDuplicateMock = vi.fn();
 const getLegalEntityOrThrowMock = vi.fn();
 const exportDraftToOmieMock = vi.fn();
 
@@ -27,8 +33,15 @@ vi.mock("../../api/src/lib/prisma.js", () => ({
 
 vi.mock("../../api/src/lib/draft-workflow.js", () => ({
   approveDraft: approveDraftMock,
+  getDraftApprovalBlockers: getDraftApprovalBlockersMock,
+  getDraftWorkflowStatus: getDraftWorkflowStatusMock,
+  listDraftDuplicateCandidates: listDraftDuplicateCandidatesMock,
+  markDraftAsDuplicate: markDraftAsDuplicateMock,
   patchDraftFields: patchDraftFieldsMock,
   rejectDraft: rejectDraftMock
+  ,
+  requestDraftReprocess: requestDraftReprocessMock,
+  undoDraftDuplicate: undoDraftDuplicateMock
 }));
 
 vi.mock("../../api/src/lib/legal-entities.js", () => ({
@@ -90,6 +103,9 @@ describe("financial draft routes", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
+    getDraftApprovalBlockersMock.mockReturnValue([]);
+    getDraftWorkflowStatusMock.mockReturnValue("pending_review");
+    listDraftDuplicateCandidatesMock.mockResolvedValue([]);
     app = await buildTestApp();
   });
 
@@ -160,6 +176,89 @@ describe("financial draft routes", () => {
           id: "draft-1",
           companyId: "company-1"
         })
+      })
+    );
+  });
+
+  it("blocks approval when workflow blockers exist", async () => {
+    prismaMock.financialDraft.findFirstOrThrow.mockResolvedValue({
+      id: "draft-1",
+      companyId: "company-1"
+    });
+    getDraftApprovalBlockersMock.mockReturnValue([
+      {
+        code: "missing_amount",
+        message: "Amount is required before approval."
+      }
+    ]);
+    const token = await loginAs(app, { role: "ANALYST", companyId: "company-1" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/financial-drafts/draft-1/approve",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {}
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(approveDraftMock).not.toHaveBeenCalled();
+  });
+
+  it("marks duplicate through explicit review action", async () => {
+    markDraftAsDuplicateMock.mockResolvedValue({
+      id: "draft-1",
+      status: "REJEITADO"
+    });
+    const token = await loginAs(app, { role: "ANALYST", companyId: "company-1" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/financial-drafts/draft-1/mark-duplicate",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {
+        duplicateOfId: "draft-2",
+        note: "Same invoice"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(markDraftAsDuplicateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draftId: "draft-1",
+        duplicateOfId: "draft-2",
+        companyId: "company-1"
+      })
+    );
+  });
+
+  it("requests AI reprocess through explicit review action", async () => {
+    requestDraftReprocessMock.mockResolvedValue({
+      id: "draft-1",
+      status: "PENDENTE_REVISAO"
+    });
+    const token = await loginAs(app, { role: "ADMIN", companyId: "company-1" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/financial-drafts/draft-1/request-reprocess",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {
+        note: "Low confidence"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(requestDraftReprocessMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draftId: "draft-1",
+        companyId: "company-1",
+        note: "Low confidence"
       })
     );
   });
