@@ -1,5 +1,4 @@
 import { FinancialDirection } from "@prisma/client";
-import { format } from "date-fns";
 
 function normalizeString(value: string) {
   return value
@@ -7,6 +6,14 @@ function normalizeString(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function formatOmieDate(value: Date) {
+  const day = String(value.getDate()).padStart(2, "0");
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const year = value.getFullYear();
+
+  return `${day}/${month}/${year}`;
 }
 
 export function normalizeOmieLookupLabel(value: string | null | undefined) {
@@ -49,8 +56,8 @@ export function mapOmieDraftPayload(input: {
   const basePayload = {
     codigo_lancamento_integracao: input.draft.id,
     codigo_cliente_fornecedor: Number(input.partyExternalId),
-    data_vencimento: format(input.draft.dueDate, "dd/MM/yyyy"),
-    data_previsao: format(input.draft.dueDate, "dd/MM/yyyy"),
+    data_vencimento: formatOmieDate(input.draft.dueDate),
+    data_previsao: formatOmieDate(input.draft.dueDate),
     valor_documento: input.draft.amount,
     codigo_categoria: input.categoryExternalId,
     id_conta_corrente: Number(input.currentAccountExternalId),

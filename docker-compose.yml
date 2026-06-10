@@ -33,6 +33,10 @@ services:
     build:
       context: ./api
       dockerfile: Dockerfile
+    command: >
+      sh -c "npx prisma migrate deploy &&
+      node dist/prisma/bootstrap.js &&
+      node dist/src/index.js"
     restart: unless-stopped
     environment:
       NODE_ENV: production

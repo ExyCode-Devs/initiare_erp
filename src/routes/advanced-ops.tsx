@@ -26,7 +26,7 @@ function AdvancedOpsPage() {
   });
 
   const selectedClientName = useMemo(
-    () => overviewQuery.data?.businessClients.find((item) => item.id === selectedClientId)?.name ?? "Cliente demo",
+    () => overviewQuery.data?.businessClients.find((item) => item.id === selectedClientId)?.name ?? "",
     [overviewQuery.data, selectedClientId],
   );
 
@@ -34,6 +34,10 @@ function AdvancedOpsPage() {
     () => overviewQuery.data?.businessClients.find((item) => item.id === selectedClientId) ?? null,
     [overviewQuery.data, selectedClientId],
   );
+
+  const canGenerateDrafts = Boolean(selectedClientId);
+
+  const buildOriginId = (prefix: string) => `${prefix}-${selectedClientId}-${Date.now()}`;
 
   const refresh = async () => {
     await Promise.all([
@@ -50,15 +54,15 @@ function AdvancedOpsPage() {
         body: {
           contracts: [
             {
-              originId: `demo-contract-${selectedClientId || "default"}`,
-              businessClientId: selectedClientId || overviewQuery.data?.businessClients[0]?.id,
+              originId: buildOriginId("contract"),
+              businessClientId: selectedClientId,
               businessClientName: selectedClientName,
               amount: 1250,
               dueDate: new Date().toISOString(),
               category: "Receita recorrente",
-              description: "Cobranca recorrente do contrato demo",
+              description: "Cobranca recorrente de contrato",
               scheduleReason: "monthly_due",
-              tags: ["recorrente", "demo"],
+              tags: ["recorrente"],
             },
           ],
           allocationRule: selectedLegalEntityId
@@ -110,15 +114,15 @@ function AdvancedOpsPage() {
         body: {
           serviceOrders: [
             {
-              originId: `demo-os-${selectedClientId || "default"}`,
-              businessClientId: selectedClientId || overviewQuery.data?.businessClients[0]?.id,
+              originId: buildOriginId("service-order"),
+              businessClientId: selectedClientId,
               businessClientName: selectedClientName,
               amount: 840,
               dueDate: new Date().toISOString(),
               category: "Projeto",
-              description: "OS faturavel demo",
+              description: "OS faturavel",
               faturavel: true,
-              tags: ["os", "demo"],
+              tags: ["os"],
             },
           ],
           allocationRule: selectedLegalEntityId
@@ -138,10 +142,10 @@ function AdvancedOpsPage() {
         method: "POST",
         body: {
           movement: {
-            id: `demo-movement-${selectedClientId || "default"}`,
+            id: buildOriginId("movement"),
             direction: "IN",
             amount: 315,
-            description: "Credito identificado demo",
+            description: "Credito identificado",
             occurredAt: new Date().toISOString(),
             suggestedPartyName: selectedClientName,
           },
@@ -158,7 +162,7 @@ function AdvancedOpsPage() {
       apiRequest<{ token: string }>("/advanced-ops/portal/access-token", {
         method: "POST",
         body: {
-          businessClientId: selectedClientId || overviewQuery.data?.businessClients[0]?.id,
+          businessClientId: selectedClientId,
           expiresInHours: 24,
         },
       }),
@@ -248,13 +252,13 @@ function AdvancedOpsPage() {
             <button onClick={() => saveAllocationRuleMutation.mutate()} disabled={saveAllocationRuleMutation.isPending || !selectedClientId || !selectedLegalEntityId} className="h-9 px-3 rounded-md border border-border text-[12.5px] hover:bg-accent disabled:opacity-60">
               Salvar regra manual
             </button>
-            <button onClick={() => contractMutation.mutate()} disabled={contractMutation.isPending} className="h-9 px-3 rounded-md border border-border text-[12.5px] hover:bg-accent disabled:opacity-60">
+            <button onClick={() => contractMutation.mutate()} disabled={contractMutation.isPending || !canGenerateDrafts} className="h-9 px-3 rounded-md border border-border text-[12.5px] hover:bg-accent disabled:opacity-60">
               Gerar draft de contrato
             </button>
-            <button onClick={() => serviceOrderMutation.mutate()} disabled={serviceOrderMutation.isPending} className="h-9 px-3 rounded-md border border-border text-[12.5px] hover:bg-accent disabled:opacity-60">
+            <button onClick={() => serviceOrderMutation.mutate()} disabled={serviceOrderMutation.isPending || !canGenerateDrafts} className="h-9 px-3 rounded-md border border-border text-[12.5px] hover:bg-accent disabled:opacity-60">
               Gerar draft de OS
             </button>
-            <button onClick={() => reconciliationMutation.mutate()} disabled={reconciliationMutation.isPending} className="h-9 px-3 rounded-md border border-border text-[12.5px] hover:bg-accent disabled:opacity-60">
+            <button onClick={() => reconciliationMutation.mutate()} disabled={reconciliationMutation.isPending || !canGenerateDrafts} className="h-9 px-3 rounded-md border border-border text-[12.5px] hover:bg-accent disabled:opacity-60">
               Criar draft de conciliacao
             </button>
           </div>
@@ -277,7 +281,7 @@ function AdvancedOpsPage() {
         <Card className="xl:col-span-6 p-5 space-y-4">
           <SectionHeader title="Portal" desc="Mint read-only client-scoped token, then preview that exact slice." />
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => portalTokenMutation.mutate()} disabled={portalTokenMutation.isPending} className="h-9 px-3 rounded-md bg-foreground text-background text-[12.5px] disabled:opacity-60">
+            <button onClick={() => portalTokenMutation.mutate()} disabled={portalTokenMutation.isPending || !canGenerateDrafts} className="h-9 px-3 rounded-md bg-foreground text-background text-[12.5px] disabled:opacity-60">
               Gerar token portal
             </button>
           </div>
