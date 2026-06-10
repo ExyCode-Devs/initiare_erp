@@ -64,13 +64,19 @@ describe("app routes", () => {
       name: "Admin User",
       email: "admin@example.com",
       passwordHash: await hashPassword("ChangeMe123!"),
-      role: "ADMIN",
-      companyId: "company-1",
-      company: {
-        id: "company-1",
-        name: "Initiare",
-        domain: "localhost",
-      },
+      memberships: [
+        {
+          id: "membership-1",
+          role: "ADMIN",
+          isDefault: true,
+          companyId: "company-1",
+          company: {
+            id: "company-1",
+            name: "Initiare",
+            domain: "localhost",
+          },
+        },
+      ],
     });
 
     const response = await app.inject({

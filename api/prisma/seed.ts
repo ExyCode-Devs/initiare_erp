@@ -160,31 +160,47 @@ async function main() {
 
   const user = await prisma.user.create({
     data: {
-      companyId: company.id,
       name: "Rafael Almeida",
       email: env.SEED_ADMIN_EMAIL,
       passwordHash: adminPasswordHash,
       role: "ADMIN",
+      memberships: {
+        create: {
+          companyId: company.id,
+          role: "ADMIN",
+          isDefault: true
+        }
+      }
     },
   });
 
   const analyst = await prisma.user.create({
     data: {
-      companyId: company.id,
       name: "Carla Nogueira",
       email: `analyst@${emailDomain}`,
       passwordHash: analystPasswordHash,
       role: "ANALYST",
+      memberships: {
+        create: {
+          companyId: company.id,
+          role: "ANALYST"
+        }
+      }
     },
   });
 
   const viewer = await prisma.user.create({
     data: {
-      companyId: company.id,
       name: "Marcos Dias",
       email: `viewer@${emailDomain}`,
       passwordHash: viewerPasswordHash,
       role: "VIEWER",
+      memberships: {
+        create: {
+          companyId: company.id,
+          role: "VIEWER"
+        }
+      }
     },
   });
 

@@ -11,15 +11,24 @@ export interface AuthCompany {
   domain: string;
 }
 
+export interface AuthMembership {
+  id: string;
+  role: "ADMIN" | "ANALYST" | "VIEWER";
+  isDefault: boolean;
+  company: AuthCompany;
+}
+
 export interface AuthResponse {
   token: string;
   user: AuthUser;
-  company: AuthCompany;
+  activeCompany: AuthCompany;
+  memberships: AuthMembership[];
 }
 
 export interface MeResponse {
   user: AuthUser;
-  company: AuthCompany;
+  activeCompany: AuthCompany;
+  memberships: AuthMembership[];
 }
 
 export interface AutomationSummaryResponse {
@@ -60,6 +69,7 @@ export interface MailboxesResponse {
     port: number;
     tls: boolean;
     username: string;
+    legalEntityId: string | null;
     fromFilter: string | null;
     active: boolean;
     lastSyncAt: string | null;

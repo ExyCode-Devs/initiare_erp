@@ -190,6 +190,9 @@ model Company {
   name                      String
   slug                      String                       @unique
   domain                    String
+  replyFromName             String?
+  replyFromEmail            String?
+  replyToEmail              String?
   companiesCount            Int                          @default(1)
   country                   String                       @default("BR")
   aiCycleLabel              String                       @default("ciclo #2.184")
@@ -202,7 +205,7 @@ model Company {
   monthlyOperations         Int                          @default(8241)
   createdAt                 DateTime                     @default(now())
   updatedAt                 DateTime                     @updatedAt
-  users                     User[]
+  memberships               UserCompanyMembership[]
   clients                   Client[]
   suppliers                 Supplier[]
   accountsPayable           AccountPayable[]
@@ -264,6 +267,7 @@ model LegalEntity {
   inboundEmails          InboundEmail[]
   businessClientEntities BusinessClientLegalEntity[]
   allocationRules        AllocationRule[]
+  mailboxAccounts        MailboxAccount[]
 
   @@unique([companyId, cnpj])
   @@index([companyId, active])
@@ -277,14 +281,28 @@ model User {
   role         UserRole @default(ADMIN)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-  companyId    String
-  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  memberships  UserCompanyMembership[]
   auditLogs    AuditLog[]
   financialDraftReviews FinancialDraftReview[]
   authoredChangelogEntries ChangelogEntry[]
   changelogReads ChangelogRead[]
   triggeredErpRequestLogs ErpRequestLog[] @relation("ErpRequestTriggeredBy")
   triggeredErpWebhookEvents ErpWebhookEvent[] @relation("ErpWebhookTriggeredBy")
+}
+
+model UserCompanyMembership {
+  id         String   @id @default(cuid())
+  userId     String
+  companyId  String
+  role       UserRole @default(ADMIN)
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+  @@index([companyId, role])
 }
 
 model MailboxAccount {
@@ -302,11 +320,14 @@ model MailboxAccount {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   companyId      String
+  legalEntityId  String?
   company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  legalEntity    LegalEntity? @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
   inboundEmails  InboundEmail[]
   jobRuns        ProcessingJobRun[]
 
   @@index([companyId, active])
+  @@index([legalEntityId, active])
 }
 
 model InboundEmail {

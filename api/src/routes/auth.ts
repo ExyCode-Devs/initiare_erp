@@ -8,13 +8,76 @@ const loginSchema = z.object({
   password: z.string().min(8)
 });
 
+const switchCompanySchema = z.object({
+  companyId: z.string().min(1)
+});
+
+async function getUserWithMemberships(userId: string) {
+  return prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    include: {
+      memberships: {
+        include: {
+          company: true
+        },
+        orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }]
+      }
+    }
+  });
+}
+
+function buildAuthResponse(user: Awaited<ReturnType<typeof getUserWithMemberships>>, activeCompanyId?: string) {
+  const activeMembership =
+    user.memberships.find((membership) => membership.companyId === activeCompanyId) ??
+    user.memberships.find((membership) => membership.isDefault) ??
+    user.memberships[0];
+
+  if (!activeMembership) {
+    throw new Error("User has no company membership");
+  }
+
+  return {
+    activeMembership,
+    payload: {
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: activeMembership.role
+      },
+      activeCompany: {
+        id: activeMembership.company.id,
+        name: activeMembership.company.name,
+        domain: activeMembership.company.domain
+      },
+      memberships: user.memberships.map((membership) => ({
+        id: membership.id,
+        role: membership.role,
+        isDefault: membership.isDefault,
+        company: {
+          id: membership.company.id,
+          name: membership.company.name,
+          domain: membership.company.domain
+        }
+      }))
+    }
+  };
+}
+
 const authRoutes: FastifyPluginAsync = async (app) => {
   app.post("/login", async (request, reply) => {
     const payload = loginSchema.parse(request.body);
 
     const user = await prisma.user.findUnique({
       where: { email: payload.email.toLowerCase() },
-      include: { company: true }
+      include: {
+        memberships: {
+          include: {
+            company: true
+          },
+          orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }]
+        }
+      }
     });
 
     if (!user || !(await verifyPassword(payload.password, user.passwordHash))) {
@@ -22,10 +85,12 @@ const authRoutes: FastifyPluginAsync = async (app) => {
       return { message: "Invalid credentials" };
     }
 
+    const auth = buildAuthResponse(user);
     const token = await reply.jwtSign({
       sub: user.id,
-      role: user.role,
-      companyId: user.companyId,
+      role: auth.activeMembership.role,
+      activeCompanyId: auth.activeMembership.companyId,
+      companyId: auth.activeMembership.companyId,
       email: user.email,
       name: user.name
     });
@@ -34,7 +99,7 @@ const authRoutes: FastifyPluginAsync = async (app) => {
       data: {
         action: "auth.login",
         resource: "user",
-        companyId: user.companyId,
+        companyId: auth.activeMembership.companyId,
         userId: user.id,
         details: {
           email: user.email
@@ -44,17 +109,7 @@ const authRoutes: FastifyPluginAsync = async (app) => {
 
     return {
       token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      },
-      company: {
-        id: user.company.id,
-        name: user.company.name,
-        domain: user.company.domain
-      }
+      ...auth.payload
     };
   });
 
@@ -64,23 +119,38 @@ const authRoutes: FastifyPluginAsync = async (app) => {
       preHandler: app.authenticate
     },
     async (request) => {
-      const user = await prisma.user.findUniqueOrThrow({
-        where: { id: request.user.sub },
-        include: { company: true }
+      const user = await getUserWithMemberships(request.user.sub);
+      return buildAuthResponse(user, request.user.activeCompanyId).payload;
+    }
+  );
+
+  app.post(
+    "/switch-company",
+    {
+      preHandler: app.authenticate
+    },
+    async (request, reply) => {
+      const payload = switchCompanySchema.parse(request.body);
+      const user = await getUserWithMemberships(request.user.sub);
+      const auth = buildAuthResponse(user, payload.companyId);
+
+      if (auth.activeMembership.companyId !== payload.companyId) {
+        reply.code(403);
+        return { message: "Forbidden" };
+      }
+
+      const token = await reply.jwtSign({
+        sub: user.id,
+        role: auth.activeMembership.role,
+        activeCompanyId: auth.activeMembership.companyId,
+        companyId: auth.activeMembership.companyId,
+        email: user.email,
+        name: user.name
       });
 
       return {
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role
-        },
-        company: {
-          id: user.company.id,
-          name: user.company.name,
-          domain: user.company.domain
-        }
+        token,
+        ...auth.payload
       };
     }
   );

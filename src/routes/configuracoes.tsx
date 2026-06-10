@@ -14,6 +14,9 @@ type SettingsResponse = {
     name: string;
     domain: string;
     companiesCount: number;
+    replyFromName: string | null;
+    replyFromEmail: string | null;
+    replyToEmail: string | null;
   };
   integrations: Array<{ id: string; name: string; status: "connected" | "available"; desc: string }>;
   ai: Array<{ l: string; v: string; hint?: string }>;
@@ -56,6 +59,13 @@ function Page() {
   const [draftValues, setDraftValues] = useState<Record<string, { appKey: string; appSecret: string; baseUrl: string; enabled: boolean }>>({});
   const [asaasDraftValues, setAsaasDraftValues] = useState<Record<string, { apiKey: string; webhookAuthToken: string; baseUrl: string; enabled: boolean }>>({});
   const [selectedLegalEntityId, setSelectedLegalEntityId] = useState<string>("");
+  const [companyForm, setCompanyForm] = useState({
+    name: "",
+    domain: "",
+    replyFromName: "",
+    replyFromEmail: "",
+    replyToEmail: ""
+  });
   const [entityForm, setEntityForm] = useState({
     legalName: "",
     tradeName: "",
@@ -71,6 +81,16 @@ function Page() {
       setSelectedLegalEntityId(legalEntitiesQuery.data.items[0].id);
     }
   }, [legalEntitiesQuery.data, selectedLegalEntityId]);
+
+  useEffect(() => {
+    setCompanyForm({
+      name: data?.company.name ?? "",
+      domain: data?.company.domain ?? "",
+      replyFromName: data?.company.replyFromName ?? "",
+      replyFromEmail: data?.company.replyFromEmail ?? "",
+      replyToEmail: data?.company.replyToEmail ?? ""
+    });
+  }, [data?.company]);
 
   const selectedLegalEntity = useMemo(
     () => legalEntitiesQuery.data?.items.find((item) => item.id === selectedLegalEntityId) ?? null,
@@ -201,6 +221,30 @@ function Page() {
       }),
     onSuccess: async () => {
       setSelectedLegalEntityId("");
+      await refreshOmie();
+    }
+  });
+
+  const saveCompanyMutation = useMutation({
+    mutationFn: (input: typeof companyForm) =>
+      apiRequest<{ company: SettingsResponse["company"] }>("/settings/company", {
+        method: "PATCH",
+        body: {
+          name: input.name,
+          domain: input.domain,
+          replyFromName: input.replyFromName.trim() || null,
+          replyFromEmail: input.replyFromEmail.trim() || null,
+          replyToEmail: input.replyToEmail.trim() || null
+        }
+      }),
+    onSuccess: async ({ company }) => {
+      setCompanyForm({
+        name: company.name,
+        domain: company.domain,
+        replyFromName: company.replyFromName ?? "",
+        replyFromEmail: company.replyFromEmail ?? "",
+        replyToEmail: company.replyToEmail ?? ""
+      });
       await refreshOmie();
     }
   });
@@ -532,6 +576,51 @@ function Page() {
               <div>
                 <div className="text-[13.5px] font-medium">Empresas gerenciadas</div>
                 <div className="text-[12px] text-muted-foreground mt-0.5">{data.company.companiesCount}</div>
+              </div>
+              <div className="rounded-xl border border-border bg-background/60 p-4 space-y-3">
+                <div className="text-[13.5px] font-medium">Active company settings</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input
+                    value={companyForm.name}
+                    onChange={(event) => setCompanyForm((current) => ({ ...current, name: event.target.value }))}
+                    className="h-9 w-full rounded-md border border-border bg-background px-3 text-[12.5px]"
+                    placeholder="Company name"
+                  />
+                  <input
+                    value={companyForm.domain}
+                    onChange={(event) => setCompanyForm((current) => ({ ...current, domain: event.target.value }))}
+                    className="h-9 w-full rounded-md border border-border bg-background px-3 text-[12.5px]"
+                    placeholder="Company domain"
+                  />
+                  <input
+                    value={companyForm.replyFromName}
+                    onChange={(event) => setCompanyForm((current) => ({ ...current, replyFromName: event.target.value }))}
+                    className="h-9 w-full rounded-md border border-border bg-background px-3 text-[12.5px]"
+                    placeholder="Reply sender name"
+                  />
+                  <input
+                    value={companyForm.replyFromEmail}
+                    onChange={(event) => setCompanyForm((current) => ({ ...current, replyFromEmail: event.target.value }))}
+                    className="h-9 w-full rounded-md border border-border bg-background px-3 text-[12.5px]"
+                    placeholder="Reply sender email"
+                  />
+                  <input
+                    value={companyForm.replyToEmail}
+                    onChange={(event) => setCompanyForm((current) => ({ ...current, replyToEmail: event.target.value }))}
+                    className="h-9 w-full rounded-md border border-border bg-background px-3 text-[12.5px] md:col-span-2"
+                    placeholder="Reply-to email"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[12px] text-muted-foreground">Reply metadata stays at company scope, legal entities stay below.</div>
+                  <button
+                    onClick={() => saveCompanyMutation.mutate(companyForm)}
+                    disabled={saveCompanyMutation.isPending}
+                    className="text-[12px] px-2.5 py-1.5 rounded-md border border-border hover:bg-accent disabled:opacity-60"
+                  >
+                    Save company
+                  </button>
+                </div>
               </div>
               <div className="rounded-xl border border-border bg-background/60 p-4 space-y-3">
                 <div className="text-[13.5px] font-medium">Legal entities</div>

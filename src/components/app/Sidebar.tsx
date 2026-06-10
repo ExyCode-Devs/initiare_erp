@@ -18,7 +18,7 @@ function NavIcon({ name, className }: { name: string; className?: string }) {
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const { company, user } = useAuth();
+  const { activeCompany, memberships, switchCompany, user } = useAuth();
   const { data } = useQuery({
     queryKey: ["sidebar-dashboard"],
     queryFn: () => apiRequest<{ hero: { openExceptions: number } }>("/dashboard/overview"),
@@ -56,13 +56,27 @@ export function Sidebar() {
         <div className="px-3 pt-3">
           <button className="w-full flex items-center gap-2.5 rounded-md border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-2 hover:bg-sidebar-accent transition-colors">
             <div className="size-6 rounded bg-gradient-to-br from-chart-4 to-chart-2 grid place-items-center text-[10px] font-semibold text-white">
-              {(company?.name ?? "VR").slice(0, 2).toUpperCase()}
+              {(activeCompany?.name ?? "VR").slice(0, 2).toUpperCase()}
             </div>
             <div className="text-left min-w-0 flex-1">
-              <div className="text-[12px] font-medium truncate">{company?.name ?? "Workspace"}</div>
+              <div className="text-[12px] font-medium truncate">{activeCompany?.name ?? "Workspace"}</div>
               <div className="text-[10px] text-muted-foreground truncate">Operacao Brasil</div>
             </div>
-            <Icons.ChevronsUpDown className="size-3.5 text-muted-foreground" />
+            {memberships.length > 1 ? (
+              <select
+                value={activeCompany?.id ?? ""}
+                onChange={(event) => void switchCompany(event.target.value)}
+                className="max-w-[110px] rounded border border-sidebar-border bg-sidebar px-1 py-0.5 text-[10px] text-muted-foreground"
+              >
+                {memberships.map((membership) => (
+                  <option key={membership.id} value={membership.company.id}>
+                    {membership.company.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <Icons.ChevronsUpDown className="size-3.5 text-muted-foreground" />
+            )}
           </button>
         </div>
       ) : null}

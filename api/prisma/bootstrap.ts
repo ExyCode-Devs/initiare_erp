@@ -34,11 +34,17 @@ async function main() {
 
   await prisma.user.create({
     data: {
-      companyId: company.id,
       name: "Initiare Admin",
       email: env.SEED_ADMIN_EMAIL,
       passwordHash: await hashPassword(env.SEED_ADMIN_PASSWORD),
-      role: "ADMIN"
+      role: "ADMIN",
+      memberships: {
+        create: {
+          companyId: company.id,
+          role: "ADMIN",
+          isDefault: true
+        }
+      }
     }
   });
 

@@ -5,7 +5,7 @@ import { apiRequest } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 
 export function Topbar() {
-  const { company, logout } = useAuth();
+  const { activeCompany, logout, memberships, switchCompany } = useAuth();
   const { data } = useQuery({
     queryKey: ["topbar-monitoring"],
     queryFn: () =>
@@ -21,10 +21,24 @@ export function Topbar() {
       <div className="h-full px-5 flex items-center gap-4">
         <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
           <Globe className="size-3.5" />
-          <span>{company?.domain ?? "app.veridia.local"}</span>
+          <span>{activeCompany?.domain ?? "app.veridia.local"}</span>
           <span className="text-border">/</span>
-          <span className="text-foreground font-medium">{company?.name ?? "Workspace"}</span>
+          <span className="text-foreground font-medium">{activeCompany?.name ?? "Workspace"}</span>
         </div>
+
+        {memberships.length > 1 ? (
+          <select
+            value={activeCompany?.id ?? ""}
+            onChange={(event) => void switchCompany(event.target.value)}
+            className="h-9 rounded-md border border-border bg-background px-3 text-[12px] text-foreground"
+          >
+            {memberships.map((membership) => (
+              <option key={membership.id} value={membership.company.id}>
+                {membership.company.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
 
         <div className="flex-1 max-w-xl mx-auto">
           <div className="relative group">

@@ -610,6 +610,7 @@ const advancedOpsRoutes: FastifyPluginAsync = async (app) => {
           {
             sub: `portal:${portalAccess.id}`,
             role: "VIEWER",
+            activeCompanyId: request.user.companyId,
             companyId: request.user.companyId,
             email: `${portalAccess.id}@portal.local`,
             name: businessClient.name,

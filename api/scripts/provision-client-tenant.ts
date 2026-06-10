@@ -99,24 +99,36 @@ async function main() {
     where: { email: adminEmail }
   });
 
-  if (existingAdmin && existingAdmin.companyId !== company.id) {
-    throw new Error(`User ${adminEmail} already belongs to another company`);
-  }
-
   const admin = await prisma.user.upsert({
     where: { email: adminEmail },
     update: {
       name: adminName,
       role: UserRole.ADMIN,
-      passwordHash: adminPasswordHash,
-      companyId: company.id
+      passwordHash: adminPasswordHash
     },
     create: {
       name: adminName,
       email: adminEmail,
       role: UserRole.ADMIN,
-      passwordHash: adminPasswordHash,
-      companyId: company.id
+      passwordHash: adminPasswordHash
+    }
+  });
+
+  await prisma.userCompanyMembership.upsert({
+    where: {
+      userId_companyId: {
+        userId: admin.id,
+        companyId: company.id
+      }
+    },
+    update: {
+      role: UserRole.ADMIN
+    },
+    create: {
+      userId: admin.id,
+      companyId: company.id,
+      role: UserRole.ADMIN,
+      isDefault: existingAdmin ? false : true
     }
   });
 

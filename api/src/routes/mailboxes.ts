@@ -11,6 +11,7 @@ const mailboxPayloadSchema = z.object({
   tls: z.boolean().default(true),
   username: z.string().trim().min(3),
   password: z.string().min(8),
+  legalEntityId: z.string().trim().nullable().optional(),
   fromFilter: z.string().trim().nullable().optional(),
   active: z.boolean().default(true)
 });
@@ -22,6 +23,7 @@ function mapMailbox(mailbox: {
   port: number;
   tls: boolean;
   username: string;
+  legalEntityId: string | null;
   fromFilter: string | null;
   active: boolean;
   lastSyncAt: Date | null;
@@ -35,6 +37,7 @@ function mapMailbox(mailbox: {
     port: mailbox.port,
     tls: mailbox.tls,
     username: mailbox.username,
+    legalEntityId: mailbox.legalEntityId,
     fromFilter: mailbox.fromFilter,
     active: mailbox.active,
     lastSyncAt: mailbox.lastSyncAt?.toISOString() ?? null,
@@ -69,6 +72,15 @@ const mailboxRoutes: FastifyPluginAsync = async (app) => {
     async (request) => {
       const payload = mailboxPayloadSchema.parse(request.body);
 
+      if (payload.legalEntityId) {
+        await prisma.legalEntity.findFirstOrThrow({
+          where: {
+            id: payload.legalEntityId,
+            companyId: request.user.companyId
+          }
+        });
+      }
+
       const mailbox = await prisma.mailboxAccount.create({
         data: {
           companyId: request.user.companyId,
@@ -78,6 +90,7 @@ const mailboxRoutes: FastifyPluginAsync = async (app) => {
           tls: payload.tls,
           username: payload.username,
           passwordCipher: encryptMailboxSecret(payload.password),
+          legalEntityId: payload.legalEntityId?.trim() || null,
           fromFilter: payload.fromFilter?.trim() || null,
           active: payload.active
         }

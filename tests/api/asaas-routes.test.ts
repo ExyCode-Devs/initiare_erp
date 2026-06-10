@@ -100,13 +100,19 @@ async function loginAs(
     name: "Admin User",
     email: "admin@example.com",
     passwordHash: await hashPassword("ChangeMe123!"),
-    role: options.role,
-    companyId: options.companyId,
-    company: {
-      id: options.companyId,
-      name: "Initiare",
-      domain: "localhost"
-    }
+    memberships: [
+      {
+        id: `membership-${options.companyId}`,
+        role: options.role,
+        isDefault: true,
+        companyId: options.companyId,
+        company: {
+          id: options.companyId,
+          name: "Initiare",
+          domain: "localhost"
+        }
+      }
+    ]
   });
 
   const response = await app.inject({

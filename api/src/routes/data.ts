@@ -31,6 +31,14 @@ const automationStatusSchema = z.object({
   status: z.enum(["ACTIVE", "PAUSED"])
 });
 
+const companySettingsSchema = z.object({
+  name: z.string().trim().min(2),
+  domain: z.string().trim().min(2),
+  replyFromName: z.string().trim().nullable().optional(),
+  replyFromEmail: z.string().trim().email().nullable().optional(),
+  replyToEmail: z.string().trim().email().nullable().optional()
+});
+
 function formatMoney(value: number) {
   return `R$ ${value.toLocaleString("pt-BR")}`;
 }
@@ -422,7 +430,10 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
         company: {
           name: company.name,
           domain: company.domain,
-          companiesCount: company.companiesCount
+          companiesCount: company.companiesCount,
+          replyFromName: company.replyFromName,
+          replyFromEmail: company.replyFromEmail,
+          replyToEmail: company.replyToEmail
         },
         integrations: integrationItems,
         ai: [
@@ -433,6 +444,39 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
         ]
       };
     });
+
+    protectedApp.patch(
+      "/settings/company",
+      {
+        preHandler: protectedApp.authorize(["ADMIN"])
+      },
+      async (request) => {
+        const payload = companySettingsSchema.parse(request.body);
+
+        const company = await prisma.company.update({
+          where: { id: request.user.companyId },
+          data: {
+            name: payload.name,
+            domain: payload.domain,
+            replyFromName: payload.replyFromName?.trim() || null,
+            replyFromEmail: payload.replyFromEmail?.trim().toLowerCase() || null,
+            replyToEmail: payload.replyToEmail?.trim().toLowerCase() || null
+          }
+        });
+
+        return {
+          company: {
+            id: company.id,
+            name: company.name,
+            domain: company.domain,
+            companiesCount: company.companiesCount,
+            replyFromName: company.replyFromName,
+            replyFromEmail: company.replyFromEmail,
+            replyToEmail: company.replyToEmail
+          }
+        };
+      }
+    );
   });
 };
 
