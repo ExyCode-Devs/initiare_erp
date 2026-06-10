@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import {
@@ -6,9 +8,11 @@ import {
   buildOperationalBi,
   classifyReconciliationMovement,
   detectBillableServiceOrders,
-  detectDueContracts
+  detectDueContracts,
+  type AllocationRuleInput
 } from "../lib/advanced-ops.js";
 import { prisma } from "../lib/prisma.js";
+import { toNullablePrismaJson } from "../lib/prisma-json.js";
 
 const allocationRuleSchema = z
   .object({
@@ -25,7 +29,7 @@ const allocationRuleSchema = z
 const contractSnapshotSchema = z.object({
   originId: z.string().min(1),
   businessClientId: z.string().min(1),
-  businessClientName: z.string().min(1),
+  businessClientName: z.string().min(1).optional(),
   amount: z.number().positive(),
   dueDate: z.string().min(10),
   category: z.string().nullable(),
@@ -37,7 +41,7 @@ const contractSnapshotSchema = z.object({
 const serviceOrderSnapshotSchema = z.object({
   originId: z.string().min(1),
   businessClientId: z.string().min(1),
-  businessClientName: z.string().min(1),
+  businessClientName: z.string().min(1).optional(),
   amount: z.number().positive(),
   dueDate: z.string().min(10),
   category: z.string().nullable(),
@@ -55,12 +59,38 @@ const movementSchema = z.object({
   suggestedPartyName: z.string().nullable().optional()
 });
 
+function decodeAllocationRule(rule: {
+  strategy: "MANUAL" | "PERCENTAGE" | "VALUE_BAND" | "GROUP";
+  legalEntityId: string | null;
+  percentageMap: unknown;
+  valueBands: unknown;
+  groupMap: unknown;
+  monthlyCapMap: unknown;
+} | null): AllocationRuleInput | null {
+  if (!rule) {
+    return null;
+  }
+
+  return {
+    strategy: rule.strategy,
+    legalEntityId: rule.legalEntityId,
+    percentageMap: Array.isArray(rule.percentageMap) ? (rule.percentageMap as AllocationRuleInput["percentageMap"]) : undefined,
+    valueBands: Array.isArray(rule.valueBands) ? (rule.valueBands as AllocationRuleInput["valueBands"]) : undefined,
+    groupMap: Array.isArray(rule.groupMap) ? (rule.groupMap as AllocationRuleInput["groupMap"]) : undefined,
+    monthlyCapMap: Array.isArray(rule.monthlyCapMap) ? (rule.monthlyCapMap as AllocationRuleInput["monthlyCapMap"]) : undefined
+  };
+}
+
+function hashToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
 const advancedOpsRoutes: FastifyPluginAsync = async (app) => {
   app.register(async (protectedApp) => {
     protectedApp.addHook("preHandler", protectedApp.authenticate);
 
     protectedApp.get("/advanced-ops/overview", async (request) => {
-      const [drafts, receivables, reconciliationItems, clients, legalEntities] = await Promise.all([
+      const [drafts, receivables, reconciliationItems, businessClients, legalEntities] = await Promise.all([
         prisma.financialDraft.findMany({
           where: { companyId: request.user.companyId },
           orderBy: { createdAt: "desc" },
@@ -76,10 +106,22 @@ const advancedOpsRoutes: FastifyPluginAsync = async (app) => {
           orderBy: { bankDate: "desc" },
           take: 100
         }),
-        prisma.client.findMany({
-          where: { companyId: request.user.companyId },
-          orderBy: { name: "asc" },
-          take: 20
+        prisma.businessClient.findMany({
+          where: { companyId: request.user.companyId, active: true },
+          include: {
+            client: true,
+            legalEntities: {
+              include: {
+                legalEntity: true
+              }
+            },
+            allocationRules: {
+              where: { active: true },
+              orderBy: { updatedAt: "desc" },
+              take: 1
+            }
+          },
+          orderBy: { name: "asc" }
         }),
         prisma.legalEntity.findMany({
           where: { companyId: request.user.companyId, active: true },
@@ -107,9 +149,25 @@ const advancedOpsRoutes: FastifyPluginAsync = async (app) => {
 
       return {
         summary,
-        businessClients: clients.map((client) => ({
-          id: client.id,
-          name: client.name
+        businessClients: businessClients.map((businessClient) => ({
+          id: businessClient.id,
+          name: businessClient.name,
+          linkedClientId: businessClient.clientId,
+          linkedClientName: businessClient.client?.name ?? null,
+          allocationRule: businessClient.allocationRules[0]
+            ? {
+                id: businessClient.allocationRules[0].id,
+                strategy: businessClient.allocationRules[0].strategy,
+                legalEntityId: businessClient.allocationRules[0].legalEntityId
+              }
+            : null,
+          legalEntities: businessClient.legalEntities.map((item) => ({
+            id: item.legalEntity.id,
+            legalName: item.legalEntity.legalName,
+            tradeName: item.legalEntity.tradeName,
+            percentage: item.percentage,
+            monthlyCap: item.monthlyCap ? Number(item.monthlyCap) : null
+          }))
         })),
         legalEntities: legalEntities.map((entity) => ({
           id: entity.id,
@@ -128,6 +186,112 @@ const advancedOpsRoutes: FastifyPluginAsync = async (app) => {
     });
 
     protectedApp.post(
+      "/advanced-ops/business-clients",
+      {
+        preHandler: protectedApp.authorize(["ADMIN", "ANALYST"])
+      },
+      async (request) => {
+        const payload = z
+          .object({
+            clientId: z.string().nullable().optional(),
+            name: z.string().min(2),
+            externalCode: z.string().nullable().optional(),
+            legalEntityIds: z.array(z.string()).default([])
+          })
+          .parse(request.body);
+
+        const businessClient = await prisma.businessClient.create({
+          data: {
+            companyId: request.user.companyId,
+            clientId: payload.clientId ?? null,
+            name: payload.name,
+            externalCode: payload.externalCode ?? null
+          }
+        });
+
+        if (payload.legalEntityIds.length) {
+          await prisma.businessClientLegalEntity.createMany({
+            data: payload.legalEntityIds.map((legalEntityId, index) => ({
+              companyId: request.user.companyId,
+              businessClientId: businessClient.id,
+              legalEntityId,
+              priority: index
+            }))
+          });
+        }
+
+        return {
+          id: businessClient.id,
+          name: businessClient.name
+        };
+      }
+    );
+
+    protectedApp.put(
+      "/advanced-ops/business-clients/:id/allocation-rule",
+      {
+        preHandler: protectedApp.authorize(["ADMIN", "ANALYST"])
+      },
+      async (request) => {
+        const params = z.object({ id: z.string().min(1) }).parse(request.params);
+        const payload = z.object({ rule: allocationRuleSchema }).parse(request.body);
+
+        await prisma.businessClient.findFirstOrThrow({
+          where: {
+            id: params.id,
+            companyId: request.user.companyId
+          }
+        });
+
+        if (!payload.rule) {
+          return { rule: null };
+        }
+
+        const existing = await prisma.allocationRule.findFirst({
+          where: {
+            companyId: request.user.companyId,
+            businessClientId: params.id,
+            active: true
+          },
+          orderBy: { updatedAt: "desc" }
+        });
+
+        const rule = existing
+          ? await prisma.allocationRule.update({
+              where: { id: existing.id },
+              data: {
+                strategy: payload.rule.strategy,
+                legalEntityId: payload.rule.legalEntityId ?? null,
+                percentageMap: payload.rule.percentageMap ? toNullablePrismaJson(payload.rule.percentageMap) : Prisma.JsonNull,
+                valueBands: payload.rule.valueBands ? toNullablePrismaJson(payload.rule.valueBands) : Prisma.JsonNull,
+                groupMap: payload.rule.groupMap ? toNullablePrismaJson(payload.rule.groupMap) : Prisma.JsonNull,
+                monthlyCapMap: payload.rule.monthlyCapMap ? toNullablePrismaJson(payload.rule.monthlyCapMap) : Prisma.JsonNull
+              }
+            })
+          : await prisma.allocationRule.create({
+              data: {
+                companyId: request.user.companyId,
+                businessClientId: params.id,
+                strategy: payload.rule.strategy,
+                legalEntityId: payload.rule.legalEntityId ?? null,
+                percentageMap: payload.rule.percentageMap ? toNullablePrismaJson(payload.rule.percentageMap) : Prisma.JsonNull,
+                valueBands: payload.rule.valueBands ? toNullablePrismaJson(payload.rule.valueBands) : Prisma.JsonNull,
+                groupMap: payload.rule.groupMap ? toNullablePrismaJson(payload.rule.groupMap) : Prisma.JsonNull,
+                monthlyCapMap: payload.rule.monthlyCapMap ? toNullablePrismaJson(payload.rule.monthlyCapMap) : Prisma.JsonNull
+              }
+            });
+
+        return {
+          rule: {
+            id: rule.id,
+            strategy: rule.strategy,
+            legalEntityId: rule.legalEntityId
+          }
+        };
+      }
+    );
+
+    protectedApp.post(
       "/advanced-ops/contracts/generate-drafts",
       {
         preHandler: protectedApp.authorize(["ADMIN", "ANALYST"])
@@ -141,22 +305,44 @@ const advancedOpsRoutes: FastifyPluginAsync = async (app) => {
           })
           .parse(request.body);
 
-        const [existingDrafts, legalEntities] = await Promise.all([
+        const businessClientIds = [...new Set(payload.contracts.map((contract) => contract.businessClientId))];
+        const [existingDrafts, legalEntities, businessClients, rules] = await Promise.all([
           prisma.financialDraft.findMany({
-            where: {
-              companyId: request.user.companyId
-            },
-            select: {
-              rawPayload: true
-            },
+            where: { companyId: request.user.companyId },
+            select: { rawPayload: true },
             orderBy: { createdAt: "desc" },
             take: 500
           }),
           prisma.legalEntity.findMany({
             where: { companyId: request.user.companyId, active: true },
             orderBy: [{ isDefault: "desc" }, { legalName: "asc" }]
+          }),
+          prisma.businessClient.findMany({
+            where: {
+              companyId: request.user.companyId,
+              id: { in: businessClientIds }
+            }
+          }),
+          prisma.allocationRule.findMany({
+            where: {
+              companyId: request.user.companyId,
+              businessClientId: { in: businessClientIds },
+              active: true
+            },
+            orderBy: { updatedAt: "desc" }
           })
         ]);
+
+        const businessClientMap = new Map(businessClients.map((item) => [item.id, item]));
+        const ruleMap = new Map<string, AllocationRuleInput>();
+        for (const rule of rules) {
+          if (!ruleMap.has(rule.businessClientId)) {
+            const decoded = decodeAllocationRule(rule);
+            if (decoded) {
+              ruleMap.set(rule.businessClientId, decoded);
+            }
+          }
+        }
 
         const dueContracts = detectDueContracts({
           contracts: payload.contracts,
@@ -166,11 +352,15 @@ const advancedOpsRoutes: FastifyPluginAsync = async (app) => {
 
         const created = [];
         for (const contract of dueContracts) {
+          const businessClient = businessClientMap.get(contract.businessClientId);
+          if (!businessClient) {
+            continue;
+          }
           const allocation = allocateLegalEntity({
             amount: contract.amount,
             tags: contract.tags,
             legalEntities,
-            rule: payload.allocationRule ?? null
+            rule: payload.allocationRule ?? ruleMap.get(contract.businessClientId) ?? null
           });
           const draft = await prisma.financialDraft.create({
             data: {
@@ -179,8 +369,8 @@ const advancedOpsRoutes: FastifyPluginAsync = async (app) => {
                 sourceLabel: "OMIE contract",
                 originType: "omie_contract",
                 originId: contract.originId,
-                businessClientId: contract.businessClientId,
-                businessClientName: contract.businessClientName,
+                businessClientId: businessClient.id,
+                businessClientName: contract.businessClientName ?? businessClient.name,
                 amount: contract.amount,
                 dueDate: contract.dueDate,
                 description: contract.description,
@@ -223,22 +413,44 @@ const advancedOpsRoutes: FastifyPluginAsync = async (app) => {
           })
           .parse(request.body);
 
-        const [existingDrafts, legalEntities] = await Promise.all([
+        const businessClientIds = [...new Set(payload.serviceOrders.map((item) => item.businessClientId))];
+        const [existingDrafts, legalEntities, businessClients, rules] = await Promise.all([
           prisma.financialDraft.findMany({
-            where: {
-              companyId: request.user.companyId
-            },
-            select: {
-              rawPayload: true
-            },
+            where: { companyId: request.user.companyId },
+            select: { rawPayload: true },
             orderBy: { createdAt: "desc" },
             take: 500
           }),
           prisma.legalEntity.findMany({
             where: { companyId: request.user.companyId, active: true },
             orderBy: [{ isDefault: "desc" }, { legalName: "asc" }]
+          }),
+          prisma.businessClient.findMany({
+            where: {
+              companyId: request.user.companyId,
+              id: { in: businessClientIds }
+            }
+          }),
+          prisma.allocationRule.findMany({
+            where: {
+              companyId: request.user.companyId,
+              businessClientId: { in: businessClientIds },
+              active: true
+            },
+            orderBy: { updatedAt: "desc" }
           })
         ]);
+
+        const businessClientMap = new Map(businessClients.map((item) => [item.id, item]));
+        const ruleMap = new Map<string, AllocationRuleInput>();
+        for (const rule of rules) {
+          if (!ruleMap.has(rule.businessClientId)) {
+            const decoded = decodeAllocationRule(rule);
+            if (decoded) {
+              ruleMap.set(rule.businessClientId, decoded);
+            }
+          }
+        }
 
         const candidates = detectBillableServiceOrders({
           serviceOrders: payload.serviceOrders,
@@ -247,11 +459,15 @@ const advancedOpsRoutes: FastifyPluginAsync = async (app) => {
 
         const created = [];
         for (const serviceOrder of candidates) {
+          const businessClient = businessClientMap.get(serviceOrder.businessClientId);
+          if (!businessClient) {
+            continue;
+          }
           const allocation = allocateLegalEntity({
             amount: serviceOrder.amount,
             tags: serviceOrder.tags,
             legalEntities,
-            rule: payload.allocationRule ?? null
+            rule: payload.allocationRule ?? ruleMap.get(serviceOrder.businessClientId) ?? null
           });
           const draft = await prisma.financialDraft.create({
             data: {
@@ -260,8 +476,8 @@ const advancedOpsRoutes: FastifyPluginAsync = async (app) => {
                 sourceLabel: "OMIE service order",
                 originType: "omie_os",
                 originId: serviceOrder.originId,
-                businessClientId: serviceOrder.businessClientId,
-                businessClientName: serviceOrder.businessClientName,
+                businessClientId: businessClient.id,
+                businessClientName: serviceOrder.businessClientName ?? businessClient.name,
                 amount: serviceOrder.amount,
                 dueDate: serviceOrder.dueDate,
                 description: serviceOrder.description,
@@ -366,38 +582,58 @@ const advancedOpsRoutes: FastifyPluginAsync = async (app) => {
       async (request) => {
         const payload = z
           .object({
-            clientId: z.string().min(1),
-            expiresInHours: z.number().int().positive().max(168).default(24)
+            businessClientId: z.string().min(1),
+            expiresInHours: z.number().int().positive().max(168).default(24),
+            label: z.string().min(2).default("Portal access")
           })
           .parse(request.body);
 
-        const client = await prisma.client.findFirstOrThrow({
+        const businessClient = await prisma.businessClient.findFirstOrThrow({
           where: {
-            id: payload.clientId,
-            companyId: request.user.companyId
+            id: payload.businessClientId,
+            companyId: request.user.companyId,
+            active: true
+          }
+        });
+
+        const portalAccess = await prisma.portalAccess.create({
+          data: {
+            companyId: request.user.companyId,
+            businessClientId: businessClient.id,
+            label: payload.label,
+            tokenHash: `pending:${Date.now()}:${businessClient.id}`,
+            expiresAt: new Date(Date.now() + payload.expiresInHours * 60 * 60 * 1000)
           }
         });
 
         const token = await app.jwt.sign(
           {
-            sub: `portal:${client.id}`,
+            sub: `portal:${portalAccess.id}`,
             role: "VIEWER",
             companyId: request.user.companyId,
-            email: `${client.id}@portal.local`,
-            name: client.name,
+            email: `${portalAccess.id}@portal.local`,
+            name: businessClient.name,
             tokenType: "portal",
-            clientId: client.id
+            portalAccessId: portalAccess.id,
+            businessClientId: businessClient.id
           },
           {
             expiresIn: `${payload.expiresInHours}h`
           }
         );
 
+        await prisma.portalAccess.update({
+          where: { id: portalAccess.id },
+          data: {
+            tokenHash: hashToken(token)
+          }
+        });
+
         return {
           token,
-          client: {
-            id: client.id,
-            name: client.name
+          businessClient: {
+            id: businessClient.id,
+            name: businessClient.name
           }
         };
       }
@@ -412,33 +648,62 @@ const advancedOpsRoutes: FastifyPluginAsync = async (app) => {
       return { message: "Unauthorized" };
     }
 
-    if (request.user.tokenType !== "portal" || !request.user.clientId) {
+    if (request.user.tokenType !== "portal" || !request.user.portalAccessId || !request.user.businessClientId) {
       reply.code(403);
       return { message: "Forbidden" };
     }
 
-    const [client, receivables] = await Promise.all([
-      prisma.client.findFirstOrThrow({
-        where: {
-          id: request.user.clientId,
-          companyId: request.user.companyId
+    const portalAccess = await prisma.portalAccess.findFirst({
+      where: {
+        id: request.user.portalAccessId,
+        companyId: request.user.companyId,
+        businessClientId: request.user.businessClientId,
+        active: true
+      },
+      include: {
+        businessClient: {
+          include: {
+            client: true
+          }
         }
-      }),
-      prisma.accountReceivable.findMany({
-        where: {
-          companyId: request.user.companyId,
-          clientId: request.user.clientId
-        },
-        orderBy: { dueDate: "desc" },
-        take: 100
-      })
-    ]);
+      }
+    });
+
+    if (!portalAccess || portalAccess.expiresAt.getTime() < Date.now()) {
+      reply.code(403);
+      return { message: "Portal access expired or revoked" };
+    }
+
+    await prisma.portalAccess.update({
+      where: { id: portalAccess.id },
+      data: {
+        lastUsedAt: new Date()
+      }
+    });
+
+    const linkedClientId = portalAccess.businessClient.clientId;
+    const receivables = linkedClientId
+      ? await prisma.accountReceivable.findMany({
+          where: {
+            companyId: request.user.companyId,
+            clientId: linkedClientId
+          },
+          orderBy: { dueDate: "desc" },
+          take: 100
+        })
+      : [];
 
     return {
-      client: {
-        id: client.id,
-        name: client.name
+      businessClient: {
+        id: portalAccess.businessClient.id,
+        name: portalAccess.businessClient.name
       },
+      client: linkedClientId
+        ? {
+            id: linkedClientId,
+            name: portalAccess.businessClient.client?.name ?? portalAccess.businessClient.name
+          }
+        : null,
       stats: {
         totalReceivables: receivables.length,
         totalVolume: receivables.reduce((sum, item) => sum + Number(item.amount), 0)

@@ -178,6 +178,13 @@ enum DraftRouteSource {
   UNKNOWN
 }
 
+enum AllocationStrategy {
+  MANUAL
+  PERCENTAGE
+  VALUE_BAND
+  GROUP
+}
+
 model Company {
   id                        String                       @id @default(cuid())
   name                      String
@@ -231,6 +238,10 @@ model Company {
   erpSyncRecords            ErpSyncRecord[]
   erpRequestLogs            ErpRequestLog[]
   erpWebhookEvents          ErpWebhookEvent[]
+  businessClients           BusinessClient[]
+  businessClientEntities    BusinessClientLegalEntity[]
+  allocationRules           AllocationRule[]
+  portalAccesses            PortalAccess[]
 }
 
 model LegalEntity {
@@ -251,6 +262,8 @@ model LegalEntity {
   financialDrafts        FinancialDraft[]
   aiEventSources         AiEventSource[]
   inboundEmails          InboundEmail[]
+  businessClientEntities BusinessClientLegalEntity[]
+  allocationRules        AllocationRule[]
 
   @@unique([companyId, cnpj])
   @@index([companyId, active])
@@ -510,6 +523,83 @@ model Client {
   companyId     String
   company       Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   receivables   AccountReceivable[]
+  businessClients BusinessClient[]
+}
+
+model BusinessClient {
+  id              String                     @id @default(cuid())
+  companyId       String
+  clientId        String?
+  name            String
+  externalCode    String?
+  active          Boolean                    @default(true)
+  metadata        Json?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  company         Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client          Client?                    @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  legalEntities   BusinessClientLegalEntity[]
+  allocationRules AllocationRule[]
+  portalAccesses  PortalAccess[]
+
+  @@unique([companyId, name])
+  @@index([companyId, active])
+  @@index([clientId])
+}
+
+model BusinessClientLegalEntity {
+  id               String         @id @default(cuid())
+  companyId        String
+  businessClientId String
+  legalEntityId    String
+  priority         Int            @default(0)
+  percentage       Float?
+  monthlyCap       Decimal?       @db.Decimal(14, 2)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessClient   BusinessClient @relation(fields: [businessClientId], references: [id], onDelete: Cascade)
+  legalEntity      LegalEntity    @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+
+  @@unique([businessClientId, legalEntityId])
+  @@index([companyId, businessClientId])
+}
+
+model AllocationRule {
+  id               String             @id @default(cuid())
+  companyId        String
+  businessClientId String
+  strategy         AllocationStrategy
+  legalEntityId    String?
+  percentageMap    Json?
+  valueBands       Json?
+  groupMap         Json?
+  monthlyCapMap    Json?
+  active           Boolean            @default(true)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  company          Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessClient   BusinessClient     @relation(fields: [businessClientId], references: [id], onDelete: Cascade)
+  legalEntity      LegalEntity?       @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, businessClientId, active])
+}
+
+model PortalAccess {
+  id               String         @id @default(cuid())
+  companyId        String
+  businessClientId String
+  label            String
+  tokenHash        String         @unique
+  active           Boolean        @default(true)
+  expiresAt        DateTime
+  lastUsedAt       DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessClient   BusinessClient @relation(fields: [businessClientId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, businessClientId, active])
 }
 
 model Supplier {

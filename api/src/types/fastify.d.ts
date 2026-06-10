@@ -12,6 +12,8 @@ declare module "@fastify/jwt" {
       name: string;
       tokenType?: "user" | "portal";
       clientId?: string;
+      businessClientId?: string;
+      portalAccessId?: string;
     };
     user: {
       sub: string;
@@ -21,6 +23,8 @@ declare module "@fastify/jwt" {
       name: string;
       tokenType?: "user" | "portal";
       clientId?: string;
+      businessClientId?: string;
+      portalAccessId?: string;
     };
   }
 }

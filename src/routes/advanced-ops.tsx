@@ -17,6 +17,7 @@ function AdvancedOpsPage() {
   const queryClient = useQueryClient();
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedLegalEntityId, setSelectedLegalEntityId] = useState("");
+  const [newBusinessClientName, setNewBusinessClientName] = useState("");
   const [portalToken, setPortalToken] = useState<string | null>(null);
 
   const overviewQuery = useQuery({
@@ -26,6 +27,11 @@ function AdvancedOpsPage() {
 
   const selectedClientName = useMemo(
     () => overviewQuery.data?.businessClients.find((item) => item.id === selectedClientId)?.name ?? "Cliente demo",
+    [overviewQuery.data, selectedClientId],
+  );
+
+  const selectedBusinessClient = useMemo(
+    () => overviewQuery.data?.businessClients.find((item) => item.id === selectedClientId) ?? null,
     [overviewQuery.data, selectedClientId],
   );
 
@@ -56,6 +62,37 @@ function AdvancedOpsPage() {
             },
           ],
           allocationRule: selectedLegalEntityId
+            ? {
+                strategy: "MANUAL",
+                legalEntityId: selectedLegalEntityId,
+              }
+            : null,
+        },
+      }),
+    onSuccess: refresh,
+  });
+
+  const createBusinessClientMutation = useMutation({
+    mutationFn: () =>
+      apiRequest("/advanced-ops/business-clients", {
+        method: "POST",
+        body: {
+          name: newBusinessClientName,
+          legalEntityIds: selectedLegalEntityId ? [selectedLegalEntityId] : [],
+        },
+      }),
+    onSuccess: async () => {
+      setNewBusinessClientName("");
+      await refresh();
+    },
+  });
+
+  const saveAllocationRuleMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/advanced-ops/business-clients/${selectedClientId}/allocation-rule`, {
+        method: "PUT",
+        body: {
+          rule: selectedLegalEntityId
             ? {
                 strategy: "MANUAL",
                 legalEntityId: selectedLegalEntityId,
@@ -121,7 +158,7 @@ function AdvancedOpsPage() {
       apiRequest<{ token: string }>("/advanced-ops/portal/access-token", {
         method: "POST",
         body: {
-          clientId: selectedClientId || overviewQuery.data?.businessClients[0]?.id,
+          businessClientId: selectedClientId || overviewQuery.data?.businessClients[0]?.id,
           expiresInHours: 24,
         },
       }),
@@ -167,9 +204,21 @@ function AdvancedOpsPage() {
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
         <Card className="xl:col-span-6 p-5 space-y-4">
           <SectionHeader title="Generators" desc="Create reviewable drafts, never definitive billing directly." />
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_auto] gap-3">
+            <input value={newBusinessClientName} onChange={(event) => setNewBusinessClientName(event.target.value)} className="h-9 rounded-md border border-border bg-background px-3 text-[12.5px]" placeholder="Novo business client" />
+            <select value={selectedLegalEntityId} onChange={(event) => setSelectedLegalEntityId(event.target.value)} className="h-9 rounded-md border border-border bg-background px-3 text-[12.5px]">
+              <option value="">Entidade padrao</option>
+              {data.legalEntities.map((entity) => (
+                <option key={entity.id} value={entity.id}>{entity.tradeName || entity.legalName}</option>
+              ))}
+            </select>
+            <button onClick={() => createBusinessClientMutation.mutate()} disabled={createBusinessClientMutation.isPending || newBusinessClientName.trim().length < 2} className="h-9 px-3 rounded-md border border-border text-[12.5px] hover:bg-accent disabled:opacity-60">
+              Criar
+            </button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <select value={selectedClientId} onChange={(event) => setSelectedClientId(event.target.value)} className="h-9 rounded-md border border-border bg-background px-3 text-[12.5px]">
-              <option value="">Escolha um cliente</option>
+              <option value="">Escolha um business client</option>
               {data.businessClients.map((client) => (
                 <option key={client.id} value={client.id}>{client.name}</option>
               ))}
@@ -181,7 +230,24 @@ function AdvancedOpsPage() {
               ))}
             </select>
           </div>
+          {selectedBusinessClient ? (
+            <div className="rounded-xl border border-border bg-background/60 p-4 text-[12px]">
+              <div>{selectedBusinessClient.name}</div>
+              <div className="mt-1 text-muted-foreground">
+                Cliente vinculado: {selectedBusinessClient.linkedClientName ?? "nao vinculado"}
+              </div>
+              <div className="mt-1 text-muted-foreground">
+                Regra atual: {selectedBusinessClient.allocationRule?.strategy ?? "sem regra persistida"}
+              </div>
+              <div className="mt-1 text-muted-foreground">
+                Entidades: {selectedBusinessClient.legalEntities.map((item) => item.tradeName || item.legalName).join(", ") || "nenhuma"}
+              </div>
+            </div>
+          ) : null}
           <div className="flex flex-wrap gap-2">
+            <button onClick={() => saveAllocationRuleMutation.mutate()} disabled={saveAllocationRuleMutation.isPending || !selectedClientId || !selectedLegalEntityId} className="h-9 px-3 rounded-md border border-border text-[12.5px] hover:bg-accent disabled:opacity-60">
+              Salvar regra manual
+            </button>
             <button onClick={() => contractMutation.mutate()} disabled={contractMutation.isPending} className="h-9 px-3 rounded-md border border-border text-[12.5px] hover:bg-accent disabled:opacity-60">
               Gerar draft de contrato
             </button>
@@ -219,7 +285,10 @@ function AdvancedOpsPage() {
           {portalOverviewQuery.isLoading ? <InlineState label="Carregando preview portal..." /> : null}
           {portalOverviewQuery.data ? (
             <div className="rounded-xl border border-border bg-background/60 p-4 space-y-3">
-              <div className="text-[12px] font-medium">{portalOverviewQuery.data.client.name}</div>
+              <div className="text-[12px] font-medium">{portalOverviewQuery.data.businessClient.name}</div>
+              <div className="text-[11px] text-muted-foreground">
+                Cliente espelho: {portalOverviewQuery.data.client?.name ?? "nao vinculado"}
+              </div>
               <div className="text-[12px] text-muted-foreground">
                 {portalOverviewQuery.data.stats.totalReceivables} recebiveis, {formatCurrency(portalOverviewQuery.data.stats.totalVolume)}
               </div>

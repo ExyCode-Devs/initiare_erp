@@ -514,6 +514,20 @@ export interface AdvancedOpsOverviewResponse {
   businessClients: Array<{
     id: string;
     name: string;
+    linkedClientId: string | null;
+    linkedClientName: string | null;
+    allocationRule: {
+      id: string;
+      strategy: string;
+      legalEntityId: string | null;
+    } | null;
+    legalEntities: Array<{
+      id: string;
+      legalName: string;
+      tradeName: string | null;
+      percentage: number | null;
+      monthlyCap: number | null;
+    }>;
   }>;
   legalEntities: Array<{
     id: string;
@@ -531,10 +545,14 @@ export interface AdvancedOpsOverviewResponse {
 }
 
 export interface PortalOverviewResponse {
-  client: {
+  businessClient: {
     id: string;
     name: string;
   };
+  client: {
+    id: string;
+    name: string;
+  } | null;
   stats: {
     totalReceivables: number;
     totalVolume: number;

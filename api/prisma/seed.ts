@@ -80,6 +80,10 @@ async function main() {
     await prisma.erpRequestLog.deleteMany();
     await prisma.erpSyncRecord.deleteMany();
     await prisma.erpConnection.deleteMany();
+    await prisma.portalAccess.deleteMany();
+    await prisma.allocationRule.deleteMany();
+    await prisma.businessClientLegalEntity.deleteMany();
+    await prisma.businessClient.deleteMany();
     await prisma.changelogRead.deleteMany();
     await prisma.changelogEntry.deleteMany();
     await prisma.financialDraftReview.deleteMany();
@@ -134,6 +138,18 @@ async function main() {
       notes: "Seed default legal entity",
       defaultRecipientEmails: ["financeiro@initiare.com.br"],
       defaultMailboxIds: ["mailbox-financeiro-principal"]
+    }
+  });
+
+  const consultingLegalEntity = await prisma.legalEntity.create({
+    data: {
+      companyId: company.id,
+      legalName: "Initiare Consultoria LTDA",
+      tradeName: "Initiare Consultoria",
+      cnpj: "98765432000110",
+      notes: "Seed second legal entity for multi-CNPJ allocation",
+      defaultRecipientEmails: ["consultoria@initiare.com.br"],
+      defaultMailboxIds: ["mailbox-consultoria"]
     }
   });
 
@@ -304,6 +320,90 @@ async function main() {
 
   const supplierByName = new Map(suppliers.map((supplier) => [supplier.name, supplier]));
   const clientByName = new Map(clients.map((client) => [client.name, client]));
+
+  const businessClients = await Promise.all([
+    prisma.businessClient.create({
+      data: {
+        companyId: company.id,
+        clientId: clientByName.get("Acme Industries")?.id,
+        name: "Acme Holdings",
+        externalCode: "BC-ACME"
+      }
+    }),
+    prisma.businessClient.create({
+      data: {
+        companyId: company.id,
+        clientId: clientByName.get("Globex Corp")?.id,
+        name: "Globex Shared Services",
+        externalCode: "BC-GLOBEX"
+      }
+    })
+  ]);
+
+  const businessClientByName = new Map(businessClients.map((item) => [item.name, item]));
+
+  await prisma.businessClientLegalEntity.createMany({
+    data: [
+      {
+        companyId: company.id,
+        businessClientId: businessClientByName.get("Acme Holdings")!.id,
+        legalEntityId: defaultLegalEntity.id,
+        priority: 0,
+        percentage: 70,
+        monthlyCap: 25000
+      },
+      {
+        companyId: company.id,
+        businessClientId: businessClientByName.get("Acme Holdings")!.id,
+        legalEntityId: consultingLegalEntity.id,
+        priority: 1,
+        percentage: 30,
+        monthlyCap: 12000
+      },
+      {
+        companyId: company.id,
+        businessClientId: businessClientByName.get("Globex Shared Services")!.id,
+        legalEntityId: consultingLegalEntity.id,
+        priority: 0,
+        percentage: 100,
+        monthlyCap: 20000
+      }
+    ]
+  });
+
+  await prisma.allocationRule.createMany({
+    data: [
+      {
+        companyId: company.id,
+        businessClientId: businessClientByName.get("Acme Holdings")!.id,
+        strategy: "PERCENTAGE",
+        percentageMap: [
+          { legalEntityId: defaultLegalEntity.id, percentage: 70 },
+          { legalEntityId: consultingLegalEntity.id, percentage: 30 }
+        ],
+        monthlyCapMap: [
+          { legalEntityId: defaultLegalEntity.id, cap: 25000, used: 0 },
+          { legalEntityId: consultingLegalEntity.id, cap: 12000, used: 0 }
+        ]
+      },
+      {
+        companyId: company.id,
+        businessClientId: businessClientByName.get("Globex Shared Services")!.id,
+        strategy: "MANUAL",
+        legalEntityId: consultingLegalEntity.id
+      }
+    ]
+  });
+
+  await prisma.portalAccess.create({
+    data: {
+      companyId: company.id,
+      businessClientId: businessClientByName.get("Acme Holdings")!.id,
+      label: "Seed portal access",
+      tokenHash: "seed-portal-access-acme",
+      expiresAt: new Date("2026-12-31T23:59:59Z")
+    }
+  });
 
   await prisma.accountPayable.createMany({
     data: [

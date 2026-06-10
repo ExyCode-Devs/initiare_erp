@@ -6,7 +6,7 @@ export type AllocationStrategy = "MANUAL" | "PERCENTAGE" | "VALUE_BAND" | "GROUP
 export type ContractSnapshotInput = {
   originId: string;
   businessClientId: string;
-  businessClientName: string;
+  businessClientName?: string;
   amount: number;
   dueDate: string;
   category: string | null;
@@ -18,7 +18,7 @@ export type ContractSnapshotInput = {
 export type ServiceOrderSnapshotInput = {
   originId: string;
   businessClientId: string;
-  businessClientName: string;
+  businessClientName?: string;
   amount: number;
   dueDate: string;
   category: string | null;

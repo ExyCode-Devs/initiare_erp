@@ -10,8 +10,26 @@ const prismaMock = {
     create: vi.fn()
   },
   client: {
+    findMany: vi.fn()
+  },
+  businessClient: {
     findMany: vi.fn(),
-    findFirstOrThrow: vi.fn()
+    findFirstOrThrow: vi.fn(),
+    create: vi.fn()
+  },
+  businessClientLegalEntity: {
+    createMany: vi.fn()
+  },
+  allocationRule: {
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn()
+  },
+  portalAccess: {
+    create: vi.fn(),
+    update: vi.fn(),
+    findFirst: vi.fn()
   },
   legalEntity: {
     findMany: vi.fn()
@@ -83,6 +101,7 @@ describe("advanced ops routes", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
+    prismaMock.portalAccess.update.mockResolvedValue({ id: "portal-1" });
     app = await buildTestApp();
   });
 
@@ -93,6 +112,8 @@ describe("advanced ops routes", () => {
   it("creates contract draft inside shared review flow", async () => {
     prismaMock.financialDraft.findMany.mockResolvedValue([]);
     prismaMock.legalEntity.findMany.mockResolvedValue([{ id: "legal-1", isDefault: true, legalName: "Main" }]);
+    prismaMock.businessClient.findMany.mockResolvedValue([{ id: "client-1", name: "Client A" }]);
+    prismaMock.allocationRule.findMany.mockResolvedValue([]);
     prismaMock.financialDraft.create.mockResolvedValue({
       id: "draft-1",
       partyName: "Client A",
@@ -136,9 +157,16 @@ describe("advanced ops routes", () => {
   });
 
   it("creates read-only portal token and keeps portal slice scoped to one client", async () => {
-    prismaMock.client.findFirstOrThrow.mockResolvedValueOnce({
-      id: "client-1",
-      name: "Client A"
+    prismaMock.businessClient.findFirstOrThrow.mockResolvedValueOnce({
+      id: "business-client-1",
+      name: "Client A",
+      companyId: "company-1"
+    });
+    prismaMock.portalAccess.create.mockResolvedValueOnce({
+      id: "portal-1",
+      businessClientId: "business-client-1",
+      companyId: "company-1",
+      expiresAt: new Date(Date.now() + 3600_000)
     });
     const token = await loginAs(app, { role: "ADMIN", companyId: "company-1" });
 
@@ -149,7 +177,7 @@ describe("advanced ops routes", () => {
         authorization: `Bearer ${token}`
       },
       payload: {
-        clientId: "client-1",
+        businessClientId: "business-client-1",
         expiresInHours: 12
       }
     });
@@ -157,9 +185,21 @@ describe("advanced ops routes", () => {
     expect(mintResponse.statusCode).toBe(200);
     const portalToken = mintResponse.json().token as string;
 
-    prismaMock.client.findFirstOrThrow.mockResolvedValueOnce({
-      id: "client-1",
-      name: "Client A"
+    prismaMock.portalAccess.findFirst.mockResolvedValueOnce({
+      id: "portal-1",
+      businessClientId: "business-client-1",
+      companyId: "company-1",
+      active: true,
+      expiresAt: new Date(Date.now() + 3600_000),
+      businessClient: {
+        id: "business-client-1",
+        name: "Client A",
+        clientId: "client-1",
+        client: {
+          id: "client-1",
+          name: "Client A"
+        }
+      }
     });
     prismaMock.accountReceivable.findMany.mockResolvedValue([
       {
