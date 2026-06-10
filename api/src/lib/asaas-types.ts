@@ -7,6 +7,8 @@ export type AsaasResolvedConnection = ErpConnection & {
 
 export type AsaasConnectionSummary = {
   id: string;
+  legalEntityId: string;
+  legalEntityName: string;
   provider: ErpProvider;
   environment: ErpEnvironment;
   baseUrl: string;

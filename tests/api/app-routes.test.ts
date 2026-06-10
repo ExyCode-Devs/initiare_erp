@@ -13,8 +13,11 @@ const prismaMock = {
 };
 
 const aiDraftServiceMock = {
-  resolveDefaultCompanyId: vi.fn(),
   ingestExternalNormalizedDraft: vi.fn(),
+};
+
+const legalEntitiesMock = {
+  resolveCompanyFromDraftRoute: vi.fn(),
 };
 
 vi.mock("../../api/src/lib/prisma.js", () => ({
@@ -22,6 +25,7 @@ vi.mock("../../api/src/lib/prisma.js", () => ({
 }));
 
 vi.mock("../../api/src/lib/ai-draft-service.js", () => aiDraftServiceMock);
+vi.mock("../../api/src/lib/legal-entities.js", () => legalEntitiesMock);
 
 async function buildTestApp() {
   process.env.DATABASE_URL = "postgresql://user:pass@localhost:5432/test";
@@ -93,7 +97,13 @@ describe("app routes", () => {
   });
 
   it("accepts valid signed Active Actions event", async () => {
-    aiDraftServiceMock.resolveDefaultCompanyId.mockResolvedValue("company-1");
+    legalEntitiesMock.resolveCompanyFromDraftRoute.mockResolvedValue({
+      companyId: "company-1",
+      legalEntityId: "legal-1",
+      routingStatus: "ROUTED",
+      routeSource: "MAILBOX",
+      routingReason: "Routed by mailbox alias finance"
+    });
     aiDraftServiceMock.ingestExternalNormalizedDraft.mockResolvedValue({
       mode: "created",
       eventSourceId: "event-1",
@@ -147,7 +157,13 @@ describe("app routes", () => {
   });
 
   it("returns duplicate mode for repeated event", async () => {
-    aiDraftServiceMock.resolveDefaultCompanyId.mockResolvedValue("company-1");
+    legalEntitiesMock.resolveCompanyFromDraftRoute.mockResolvedValue({
+      companyId: "company-1",
+      legalEntityId: "legal-1",
+      routingStatus: "ROUTED",
+      routeSource: "MAILBOX",
+      routingReason: "Routed by mailbox alias finance"
+    });
     aiDraftServiceMock.ingestExternalNormalizedDraft.mockResolvedValue({
       mode: "duplicate",
       eventSourceId: "event-1",

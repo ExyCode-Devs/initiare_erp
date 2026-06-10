@@ -172,6 +172,11 @@ export interface FinancialDraftListResponse {
     suggestedCategory: string | null;
     finalCategory: string | null;
     paymentMethod: string | null;
+    legalEntityId: string | null;
+    legalEntityName: string | null;
+    routingStatus: string;
+    routingReason: string | null;
+    routeSource: string;
     confidenceScore: number;
     confidenceBand: string;
     status: string;
@@ -210,6 +215,11 @@ export interface FinancialDraftDetailResponse {
   suggestedCategory: string | null;
   finalCategory: string | null;
   paymentMethod: string | null;
+  legalEntityId: string | null;
+  legalEntityName: string | null;
+  routingStatus: string;
+  routingReason: string | null;
+  routeSource: string;
   bankData: Record<string, unknown> | null;
   notes: string | null;
   confidenceScore: number;
@@ -300,10 +310,28 @@ export interface FinancialDraftDetailResponse {
   };
 }
 
+export interface LegalEntitiesResponse {
+  items: Array<{
+    id: string;
+    legalName: string;
+    tradeName: string | null;
+    cnpj: string;
+    active: boolean;
+    isDefault: boolean;
+    defaultRecipientEmails: string[];
+    defaultMailboxIds: string[];
+    notes: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+}
+
 export interface OmieSettingsResponse {
   provider: "OMIE";
   environments: Array<{
     id: string;
+    legalEntityId: string;
+    legalEntityName: string;
     provider: "OMIE";
     environment: "HOMOLOG" | "PRODUCTION";
     baseUrl: string;
@@ -321,6 +349,8 @@ export interface AsaasSettingsResponse {
   provider: "ASAAS";
   environments: Array<{
     id: string;
+    legalEntityId: string;
+    legalEntityName: string;
     provider: "ASAAS";
     environment: "SANDBOX" | "PRODUCTION";
     baseUrl: string;

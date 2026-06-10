@@ -84,10 +84,11 @@ async function upsertSyncRecord(input: {
 
 export async function syncAsaasData(input: {
   companyId: string;
+  legalEntityId: string;
   environment: ErpEnvironment;
   triggeredByUserId: string;
 }): Promise<AsaasSyncResult> {
-  const connection = await resolveAsaasConnection(input.companyId, input.environment);
+  const connection = await resolveAsaasConnection(input.companyId, input.legalEntityId, input.environment);
   const client = new AsaasClient(connection);
   const context = {
     companyId: input.companyId,

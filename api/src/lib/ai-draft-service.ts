@@ -1,5 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { Prisma, type AiEventOriginType, type FinancialDirection, type User } from "@prisma/client";
+import {
+  DraftRouteSource,
+  DraftRoutingStatus,
+  Prisma,
+  type AiEventOriginType,
+  type FinancialDirection,
+  type User
+} from "@prisma/client";
 import { writeAuditLog } from "./audit.js";
 import { toNullablePrismaJson, toPrismaJson } from "./prisma-json.js";
 import { prisma } from "./prisma.js";
@@ -22,6 +29,8 @@ type DraftPayload = {
 type SourcePayload = {
   channel: string;
   sender?: string | null;
+  recipient?: string | null;
+  mailbox?: string | null;
   subject?: string | null;
   summary?: string | null;
   attachments?: Array<Record<string, unknown>>;
@@ -37,12 +46,16 @@ type AiPayload = {
 
 type IngestInput = {
   companyId: string;
+  legalEntityId?: string | null;
   eventId: string;
   occurredAt: string;
   originType: AiEventOriginType;
   source: SourcePayload;
   draft: DraftPayload;
   ai: AiPayload;
+  routingStatus: DraftRoutingStatus;
+  routeSource: DraftRouteSource;
+  routingReason?: string | null;
   rawPayload: Record<string, unknown>;
 };
 
@@ -121,6 +134,7 @@ async function persistDraftFromEvent(tx: Prisma.TransactionClient, input: Ingest
   return tx.financialDraft.create({
     data: {
       companyId: input.companyId,
+      legalEntityId: input.legalEntityId ?? null,
       direction: input.draft.direction,
       partyName: input.draft.partyName,
       cpfCnpj: input.draft.cpfCnpj ?? null,
@@ -138,19 +152,13 @@ async function persistDraftFromEvent(tx: Prisma.TransactionClient, input: Ingest
       confidenceScore,
       confidenceBand,
       sourceLabel: buildSourceLabel(input.originType),
+      routingStatus: input.routingStatus,
+      routeSource: input.routeSource,
+      routingReason: input.routingReason ?? null,
       sourceEventId: input.eventSourceId,
       aiRunId: input.aiRunId
     }
   });
-}
-
-export async function resolveDefaultCompanyId() {
-  const company = await prisma.company.findFirstOrThrow({
-    orderBy: { createdAt: "asc" },
-    select: { id: true }
-  });
-
-  return company.id;
 }
 
 export async function ingestExternalNormalizedDraft(input: IngestInput) {
@@ -186,6 +194,7 @@ export async function ingestExternalNormalizedDraft(input: IngestInput) {
     const eventSource = await tx.aiEventSource.create({
       data: {
         companyId: input.companyId,
+        legalEntityId: input.legalEntityId ?? null,
         eventId: input.eventId,
         originType: input.originType,
         channel: input.source.channel,
@@ -194,7 +203,10 @@ export async function ingestExternalNormalizedDraft(input: IngestInput) {
         summary: input.source.summary ?? null,
         attachmentsMeta: toNullablePrismaJson(input.source.attachments ?? []),
         rawPayload: toPrismaJson(input.rawPayload),
-        receivedAt: new Date(input.occurredAt)
+        receivedAt: new Date(input.occurredAt),
+        routingStatus: input.routingStatus,
+        routeSource: input.routeSource,
+        routingReason: input.routingReason ?? null
       }
     });
 
@@ -206,12 +218,24 @@ export async function ingestExternalNormalizedDraft(input: IngestInput) {
         requestPayload: toPrismaJson({
           eventId: input.eventId,
           source: input.source,
-          draft: input.draft
+          draft: input.draft,
+          route: {
+            legalEntityId: input.legalEntityId ?? null,
+            routingStatus: input.routingStatus,
+            routeSource: input.routeSource,
+            routingReason: input.routingReason ?? null
+          }
         }),
         rawResponse: input.ai.rawResponse,
         parsedResponse: toPrismaJson({
           draft: input.draft,
-          providerMeta: input.ai.providerMeta ?? null
+          providerMeta: input.ai.providerMeta ?? null,
+          route: {
+            legalEntityId: input.legalEntityId ?? null,
+            routingStatus: input.routingStatus,
+            routeSource: input.routeSource,
+            routingReason: input.routingReason ?? null
+          }
         }),
         status: "SUCESSO",
         durationMs: input.ai.durationMs ?? null,
@@ -241,14 +265,17 @@ export async function ingestExternalNormalizedDraft(input: IngestInput) {
     companyId: input.companyId,
     action: "ai_event.processed",
     resource: "ai-event-source",
-    details: {
-      eventId: input.eventId,
-      eventSourceId: created.eventSourceId,
-      aiRunId: created.aiRunId,
-      draftId: created.draftId,
-      originType: input.originType
-    }
-  });
+        details: {
+          eventId: input.eventId,
+          eventSourceId: created.eventSourceId,
+          aiRunId: created.aiRunId,
+          draftId: created.draftId,
+          originType: input.originType,
+          legalEntityId: input.legalEntityId ?? null,
+          routingStatus: input.routingStatus,
+          routeSource: input.routeSource
+        }
+      });
 
   return {
     mode: "created" as const,
@@ -261,6 +288,7 @@ export async function runInternalDraftGeneration(input: InternalGenerationInput)
   const eventSource = await prisma.aiEventSource.create({
     data: {
       companyId: input.companyId,
+      legalEntityId: null,
       eventId: input.eventId,
       originType: "INTERNAL",
       channel: input.source.channel,
@@ -269,7 +297,10 @@ export async function runInternalDraftGeneration(input: InternalGenerationInput)
       summary: input.source.summary ?? null,
       attachmentsMeta: toNullablePrismaJson(input.source.attachments ?? []),
       rawPayload: toPrismaJson(input.requestPayload),
-      receivedAt: new Date(occurredAt)
+      receivedAt: new Date(occurredAt),
+      routingStatus: DraftRoutingStatus.UNROUTED,
+      routeSource: DraftRouteSource.UNKNOWN,
+      routingReason: "Internal generation requires manual legal entity assignment"
     }
   });
 
@@ -309,6 +340,10 @@ export async function runInternalDraftGeneration(input: InternalGenerationInput)
         source: input.source,
         draft: result.draft,
         ai: result.ai,
+        legalEntityId: null,
+        routingStatus: DraftRoutingStatus.UNROUTED,
+        routeSource: DraftRouteSource.UNKNOWN,
+        routingReason: "Internal generation requires manual legal entity assignment",
         rawPayload: result.rawPayload ?? input.requestPayload,
         aiRunId: updatedRun.id,
         eventSourceId: eventSource.id

@@ -67,6 +67,7 @@ describe("omie-export-service", () => {
     prismaMock.financialDraft.findFirstOrThrow.mockResolvedValue({
       id: "draft-1",
       companyId: "company-1",
+      legalEntityId: "legal-1",
       status: "APROVADO",
       direction: "CONTA_PAGAR",
       partyName: "CloudPlus",
@@ -119,6 +120,7 @@ describe("omie-export-service", () => {
     prismaMock.financialDraft.findFirstOrThrow.mockResolvedValue({
       id: "draft-2",
       companyId: "company-1",
+      legalEntityId: "legal-1",
       status: "APROVADO",
       direction: "CONTA_PAGAR",
       partyName: "Unknown supplier",

@@ -24,6 +24,7 @@ const listAsaasConnectionsMock = vi.fn();
 const saveAsaasConnectionMock = vi.fn();
 const resolveAsaasConnectionMock = vi.fn();
 const markAsaasConnectionHealthMock = vi.fn();
+const findAsaasConnectionByWebhookTokenMock = vi.fn();
 const syncAsaasDataMock = vi.fn();
 const processAsaasWebhookMock = vi.fn();
 const listCustomersMock = vi.fn();
@@ -33,6 +34,7 @@ vi.mock("../../api/src/lib/prisma.js", () => ({
 }));
 
 vi.mock("../../api/src/lib/asaas-connections.js", () => ({
+  findAsaasConnectionByWebhookToken: findAsaasConnectionByWebhookTokenMock,
   listAsaasConnections: listAsaasConnectionsMock,
   saveAsaasConnection: saveAsaasConnectionMock,
   resolveAsaasConnection: resolveAsaasConnectionMock,
@@ -169,6 +171,9 @@ describe("asaas routes", () => {
       url: "/api/settings/integrations/asaas/SANDBOX/test",
       headers: {
         authorization: `Bearer ${token}`
+      },
+      payload: {
+        legalEntityId: "legal-1"
       }
     });
 
@@ -177,7 +182,10 @@ describe("asaas routes", () => {
   });
 
   it("accepts valid webhook", async () => {
-    prismaMock.company.findFirstOrThrow.mockResolvedValue({ id: "company-1" });
+    findAsaasConnectionByWebhookTokenMock.mockResolvedValue({
+      companyId: "company-1",
+      legalEntityId: "legal-1"
+    });
     processAsaasWebhookMock.mockResolvedValue({
       accepted: true,
       eventId: "PAYMENT_RECEIVED:pay_1:no-id",
@@ -188,6 +196,9 @@ describe("asaas routes", () => {
     const response = await app.inject({
       method: "POST",
       url: "/api/integrations/asaas/webhook/SANDBOX",
+      headers: {
+        "asaas-access-token": "whsec_sandbox_example"
+      },
       payload: {
         event: "PAYMENT_RECEIVED",
         payment: { id: "pay_1" }

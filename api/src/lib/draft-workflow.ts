@@ -1,4 +1,4 @@
-import { DraftStatus, Prisma, ReviewAction, type User } from "@prisma/client";
+import { DraftRouteSource, DraftRoutingStatus, DraftStatus, Prisma, ReviewAction, type User } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import { writeAuditLog } from "./audit.js";
 import { toNullablePrismaJson } from "./prisma-json.js";
@@ -55,6 +55,10 @@ export async function patchDraftFields(input: {
     paymentMethod: string | null;
     bankData: Record<string, unknown> | null;
     notes: string | null;
+    legalEntityId: string | null;
+    routingStatus: DraftRoutingStatus;
+    routeSource: DraftRouteSource;
+    routingReason: string | null;
   }>;
 }) {
   const draft = await prisma.financialDraft.findFirstOrThrow({
@@ -83,6 +87,10 @@ export async function patchDraftFields(input: {
       finalCategory: input.values.finalCategory === undefined ? draft.finalCategory : input.values.finalCategory,
       paymentMethod: input.values.paymentMethod === undefined ? draft.paymentMethod : input.values.paymentMethod,
       notes: input.values.notes === undefined ? draft.notes : input.values.notes,
+      legalEntityId: input.values.legalEntityId === undefined ? draft.legalEntityId : input.values.legalEntityId,
+      routingStatus: input.values.routingStatus === undefined ? draft.routingStatus : input.values.routingStatus,
+      routeSource: input.values.routeSource === undefined ? draft.routeSource : input.values.routeSource,
+      routingReason: input.values.routingReason === undefined ? draft.routingReason : input.values.routingReason,
       reviewedAt: new Date(),
       ...(input.values.bankData !== undefined
         ? {
@@ -104,7 +112,11 @@ export async function patchDraftFields(input: {
       finalCategory: draft.finalCategory,
       paymentMethod: draft.paymentMethod,
       bankData: draft.bankData,
-      notes: draft.notes
+      notes: draft.notes,
+      legalEntityId: draft.legalEntityId,
+      routingStatus: draft.routingStatus,
+      routeSource: draft.routeSource,
+      routingReason: draft.routingReason
     },
     {
       partyName: updated.partyName,
@@ -117,7 +129,11 @@ export async function patchDraftFields(input: {
       finalCategory: updated.finalCategory,
       paymentMethod: updated.paymentMethod,
       bankData: updated.bankData,
-      notes: updated.notes
+      notes: updated.notes,
+      legalEntityId: updated.legalEntityId,
+      routingStatus: updated.routingStatus,
+      routeSource: updated.routeSource,
+      routingReason: updated.routingReason
     }
   );
 

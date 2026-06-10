@@ -124,6 +124,19 @@ async function main() {
     },
   });
 
+  const defaultLegalEntity = await prisma.legalEntity.create({
+    data: {
+      companyId: company.id,
+      legalName: env.SEED_COMPANY_NAME,
+      tradeName: env.SEED_COMPANY_NAME,
+      cnpj: "12345678000195",
+      isDefault: true,
+      notes: "Seed default legal entity",
+      defaultRecipientEmails: ["financeiro@initiare.com.br"],
+      defaultMailboxIds: ["mailbox-financeiro-principal"]
+    }
+  });
+
   const adminPasswordHash = await hashPassword(env.SEED_ADMIN_PASSWORD);
   const analystPasswordHash = await hashPassword(env.SEED_ADMIN_PASSWORD);
   const viewerPasswordHash = await hashPassword(env.SEED_ADMIN_PASSWORD);
@@ -804,6 +817,7 @@ async function main() {
     data: [
       {
         companyId: company.id,
+        legalEntityId: defaultLegalEntity.id,
         provider: "OMIE",
         environment: "HOMOLOG",
         baseUrl: "https://app.omie.com.br/api/v1",
@@ -814,6 +828,7 @@ async function main() {
       },
       {
         companyId: company.id,
+        legalEntityId: defaultLegalEntity.id,
         provider: "OMIE",
         environment: "PRODUCTION",
         baseUrl: "https://app.omie.com.br/api/v1",
@@ -824,6 +839,7 @@ async function main() {
       },
       {
         companyId: company.id,
+        legalEntityId: defaultLegalEntity.id,
         provider: "ASAAS",
         environment: "SANDBOX",
         baseUrl: "https://api-sandbox.asaas.com/v3",
@@ -834,6 +850,7 @@ async function main() {
       },
       {
         companyId: company.id,
+        legalEntityId: defaultLegalEntity.id,
         provider: "ASAAS",
         environment: "PRODUCTION",
         baseUrl: "https://api.asaas.com/v3",

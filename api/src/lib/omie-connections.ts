@@ -1,5 +1,6 @@
 import { ErpEnvironment, ErpHealthStatus, ErpProvider } from "@prisma/client";
 import { env } from "../config/env.js";
+import { ensureDefaultLegalEntity, getLegalEntityOrThrow } from "./legal-entities.js";
 import { decryptOmieSecret, encryptOmieSecret } from "./omie-crypto.js";
 import { prisma } from "./prisma.js";
 import type { OmieConnectionSummary, OmieResolvedConnection } from "./omie-types.js";
@@ -27,7 +28,7 @@ function hasEnvDefaults(environment: ErpEnvironment) {
   return Boolean(values.appKey && values.appSecret);
 }
 
-async function materializeEnvBackedConnection(companyId: string, environment: ErpEnvironment) {
+async function materializeEnvBackedConnection(companyId: string, legalEntityId: string, environment: ErpEnvironment) {
   const defaults = getEnvDefaults(environment);
   if (!defaults.appKey || !defaults.appSecret) {
     return null;
@@ -35,8 +36,8 @@ async function materializeEnvBackedConnection(companyId: string, environment: Er
 
   return prisma.erpConnection.upsert({
     where: {
-      companyId_provider_environment: {
-        companyId,
+      legalEntityId_provider_environment: {
+        legalEntityId,
         provider: ErpProvider.OMIE,
         environment
       }
@@ -49,6 +50,7 @@ async function materializeEnvBackedConnection(companyId: string, environment: Er
     },
     create: {
       companyId,
+      legalEntityId,
       provider: ErpProvider.OMIE,
       environment,
       baseUrl: defaults.baseUrl,
@@ -60,16 +62,29 @@ async function materializeEnvBackedConnection(companyId: string, environment: Er
 }
 
 export async function listOmieConnections(companyId: string): Promise<OmieConnectionSummary[]> {
+  const legalEntities = await prisma.legalEntity.findMany({
+    where: { companyId, active: true },
+    orderBy: [{ isDefault: "desc" }, { legalName: "asc" }]
+  });
+  if (!legalEntities.length) {
+    legalEntities.push(await ensureDefaultLegalEntity(companyId));
+  }
+
   await Promise.all(
-    [ErpEnvironment.HOMOLOG, ErpEnvironment.PRODUCTION]
-      .filter((environment) => hasEnvDefaults(environment))
-      .map((environment) => materializeEnvBackedConnection(companyId, environment))
+    legalEntities.flatMap((legalEntity) =>
+      [ErpEnvironment.HOMOLOG, ErpEnvironment.PRODUCTION]
+        .filter((environment) => hasEnvDefaults(environment))
+        .map((environment) => materializeEnvBackedConnection(companyId, legalEntity.id, environment))
+    )
   );
 
   const records = await prisma.erpConnection.findMany({
     where: {
       companyId,
       provider: ErpProvider.OMIE
+    },
+    include: {
+      legalEntity: true
     },
     orderBy: {
       environment: "asc"
@@ -78,6 +93,8 @@ export async function listOmieConnections(companyId: string): Promise<OmieConnec
 
   return records.map((record) => ({
     id: record.id,
+    legalEntityId: record.legalEntityId,
+    legalEntityName: record.legalEntity.tradeName?.trim() || record.legalEntity.legalName,
     provider: record.provider,
     environment: record.environment,
     baseUrl: record.baseUrl,
@@ -93,16 +110,18 @@ export async function listOmieConnections(companyId: string): Promise<OmieConnec
 
 export async function saveOmieConnection(input: {
   companyId: string;
+  legalEntityId: string;
   environment: ErpEnvironment;
   appKey?: string | null;
   appSecret?: string | null;
   baseUrl?: string | null;
   enabled: boolean;
 }) {
+  await getLegalEntityOrThrow(input.companyId, input.legalEntityId);
   const existing = await prisma.erpConnection.findUnique({
     where: {
-      companyId_provider_environment: {
-        companyId: input.companyId,
+      legalEntityId_provider_environment: {
+        legalEntityId: input.legalEntityId,
         provider: ErpProvider.OMIE,
         environment: input.environment
       }
@@ -114,8 +133,8 @@ export async function saveOmieConnection(input: {
 
   return prisma.erpConnection.upsert({
     where: {
-      companyId_provider_environment: {
-        companyId: input.companyId,
+      legalEntityId_provider_environment: {
+        legalEntityId: input.legalEntityId,
         provider: ErpProvider.OMIE,
         environment: input.environment
       }
@@ -134,6 +153,7 @@ export async function saveOmieConnection(input: {
     },
     create: {
       companyId: input.companyId,
+      legalEntityId: input.legalEntityId,
       provider: ErpProvider.OMIE,
       environment: input.environment,
       baseUrl: nextBaseUrl,
@@ -144,11 +164,15 @@ export async function saveOmieConnection(input: {
   });
 }
 
-export async function resolveOmieConnection(companyId: string, environment: ErpEnvironment): Promise<OmieResolvedConnection> {
+export async function resolveOmieConnection(
+  companyId: string,
+  legalEntityId: string,
+  environment: ErpEnvironment
+): Promise<OmieResolvedConnection> {
   let connection = await prisma.erpConnection.findUnique({
     where: {
-      companyId_provider_environment: {
-        companyId,
+      legalEntityId_provider_environment: {
+        legalEntityId,
         provider: ErpProvider.OMIE,
         environment
       }
@@ -156,7 +180,7 @@ export async function resolveOmieConnection(companyId: string, environment: ErpE
   });
 
   if (!connection && hasEnvDefaults(environment)) {
-    connection = await materializeEnvBackedConnection(companyId, environment);
+    connection = await materializeEnvBackedConnection(companyId, legalEntityId, environment);
   }
 
   if (!connection) {

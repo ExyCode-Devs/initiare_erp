@@ -11,6 +11,9 @@ import {
 } from "../lib/omie-connections.js";
 
 const environmentSchema = z.enum(["HOMOLOG", "PRODUCTION"]);
+const legalEntityBodySchema = z.object({
+  legalEntityId: z.string().min(1)
+});
 
 const omieRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", app.authenticate);
@@ -33,6 +36,7 @@ const omieRoutes: FastifyPluginAsync = async (app) => {
       const params = z.object({ environment: environmentSchema }).parse(request.params);
       const payload = z
         .object({
+          legalEntityId: z.string().min(1),
           appKey: z.string().trim().optional().nullable(),
           appSecret: z.string().trim().optional().nullable(),
           baseUrl: z.string().trim().optional().nullable(),
@@ -42,6 +46,7 @@ const omieRoutes: FastifyPluginAsync = async (app) => {
 
       const record = await saveOmieConnection({
         companyId: request.user.companyId,
+        legalEntityId: payload.legalEntityId,
         environment: params.environment as ErpEnvironment,
         appKey: payload.appKey ?? null,
         appSecret: payload.appSecret ?? null,
@@ -67,7 +72,12 @@ const omieRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request) => {
       const params = z.object({ environment: environmentSchema }).parse(request.params);
-      const connection = await resolveOmieConnection(request.user.companyId, params.environment as ErpEnvironment);
+      const payload = legalEntityBodySchema.parse(request.body ?? {});
+      const connection = await resolveOmieConnection(
+        request.user.companyId,
+        payload.legalEntityId,
+        params.environment as ErpEnvironment
+      );
       const client = new OmieClient(connection);
 
       try {
@@ -107,9 +117,11 @@ const omieRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request) => {
       const params = z.object({ environment: environmentSchema }).parse(request.params);
+      const payload = legalEntityBodySchema.parse(request.body ?? {});
 
       return syncOmieCatalogs({
         companyId: request.user.companyId,
+        legalEntityId: payload.legalEntityId,
         environment: params.environment as ErpEnvironment,
         triggeredByUserId: request.user.sub
       });

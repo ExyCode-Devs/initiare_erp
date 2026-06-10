@@ -1,6 +1,7 @@
 import { ErpEnvironment, ErpHealthStatus, ErpProvider } from "@prisma/client";
 import { env } from "../config/env.js";
 import { decryptAsaasSecret, encryptAsaasSecret } from "./asaas-crypto.js";
+import { ensureDefaultLegalEntity, getLegalEntityOrThrow } from "./legal-entities.js";
 import { prisma } from "./prisma.js";
 import type { AsaasConnectionSummary, AsaasResolvedConnection } from "./asaas-types.js";
 
@@ -28,7 +29,7 @@ function hasEnvDefaults(environment: ErpEnvironment) {
   return Boolean(values.apiKey);
 }
 
-async function materializeEnvBackedConnection(companyId: string, environment: ErpEnvironment) {
+async function materializeEnvBackedConnection(companyId: string, legalEntityId: string, environment: ErpEnvironment) {
   const defaults = getEnvDefaults(environment);
   if (!defaults.apiKey) {
     return null;
@@ -36,8 +37,8 @@ async function materializeEnvBackedConnection(companyId: string, environment: Er
 
   return prisma.erpConnection.upsert({
     where: {
-      companyId_provider_environment: {
-        companyId,
+      legalEntityId_provider_environment: {
+        legalEntityId,
         provider: ErpProvider.ASAAS,
         environment
       }
@@ -50,6 +51,7 @@ async function materializeEnvBackedConnection(companyId: string, environment: Er
     },
     create: {
       companyId,
+      legalEntityId,
       provider: ErpProvider.ASAAS,
       environment,
       baseUrl: defaults.baseUrl,
@@ -61,16 +63,29 @@ async function materializeEnvBackedConnection(companyId: string, environment: Er
 }
 
 export async function listAsaasConnections(companyId: string): Promise<AsaasConnectionSummary[]> {
+  const legalEntities = await prisma.legalEntity.findMany({
+    where: { companyId, active: true },
+    orderBy: [{ isDefault: "desc" }, { legalName: "asc" }]
+  });
+  if (!legalEntities.length) {
+    legalEntities.push(await ensureDefaultLegalEntity(companyId));
+  }
+
   await Promise.all(
-    [ErpEnvironment.SANDBOX, ErpEnvironment.PRODUCTION]
-      .filter((environment) => hasEnvDefaults(environment))
-      .map((environment) => materializeEnvBackedConnection(companyId, environment))
+    legalEntities.flatMap((legalEntity) =>
+      [ErpEnvironment.SANDBOX, ErpEnvironment.PRODUCTION]
+        .filter((environment) => hasEnvDefaults(environment))
+        .map((environment) => materializeEnvBackedConnection(companyId, legalEntity.id, environment))
+    )
   );
 
   const records = await prisma.erpConnection.findMany({
     where: {
       companyId,
       provider: ErpProvider.ASAAS
+    },
+    include: {
+      legalEntity: true
     },
     orderBy: {
       environment: "asc"
@@ -79,6 +94,8 @@ export async function listAsaasConnections(companyId: string): Promise<AsaasConn
 
   return records.map((record) => ({
     id: record.id,
+    legalEntityId: record.legalEntityId,
+    legalEntityName: record.legalEntity.tradeName?.trim() || record.legalEntity.legalName,
     provider: record.provider,
     environment: record.environment,
     baseUrl: record.baseUrl,
@@ -94,16 +111,18 @@ export async function listAsaasConnections(companyId: string): Promise<AsaasConn
 
 export async function saveAsaasConnection(input: {
   companyId: string;
+  legalEntityId: string;
   environment: ErpEnvironment;
   apiKey?: string | null;
   webhookAuthToken?: string | null;
   baseUrl?: string | null;
   enabled: boolean;
 }) {
+  await getLegalEntityOrThrow(input.companyId, input.legalEntityId);
   const existing = await prisma.erpConnection.findUnique({
     where: {
-      companyId_provider_environment: {
-        companyId: input.companyId,
+      legalEntityId_provider_environment: {
+        legalEntityId: input.legalEntityId,
         provider: ErpProvider.ASAAS,
         environment: input.environment
       }
@@ -117,8 +136,8 @@ export async function saveAsaasConnection(input: {
 
   return prisma.erpConnection.upsert({
     where: {
-      companyId_provider_environment: {
-        companyId: input.companyId,
+      legalEntityId_provider_environment: {
+        legalEntityId: input.legalEntityId,
         provider: ErpProvider.ASAAS,
         environment: input.environment
       }
@@ -135,6 +154,7 @@ export async function saveAsaasConnection(input: {
     },
     create: {
       companyId: input.companyId,
+      legalEntityId: input.legalEntityId,
       provider: ErpProvider.ASAAS,
       environment: input.environment,
       baseUrl: nextBaseUrl,
@@ -148,12 +168,13 @@ export async function saveAsaasConnection(input: {
 
 export async function resolveAsaasConnection(
   companyId: string,
+  legalEntityId: string,
   environment: ErpEnvironment
 ): Promise<AsaasResolvedConnection> {
   let connection = await prisma.erpConnection.findUnique({
     where: {
-      companyId_provider_environment: {
-        companyId,
+      legalEntityId_provider_environment: {
+        legalEntityId,
         provider: ErpProvider.ASAAS,
         environment
       }
@@ -161,7 +182,7 @@ export async function resolveAsaasConnection(
   });
 
   if (!connection && hasEnvDefaults(environment)) {
-    connection = await materializeEnvBackedConnection(companyId, environment);
+    connection = await materializeEnvBackedConnection(companyId, legalEntityId, environment);
   }
 
   if (!connection) {
@@ -183,6 +204,30 @@ export async function resolveAsaasConnection(
     apiKey,
     webhookAuthToken
   };
+}
+
+export async function findAsaasConnectionByWebhookToken(environment: ErpEnvironment, token: string) {
+  const connections = await prisma.erpConnection.findMany({
+    where: {
+      provider: ErpProvider.ASAAS,
+      environment,
+      enabled: true,
+      webhookAuthTokenCipher: {
+        not: null
+      }
+    }
+  });
+
+  for (const connection of connections) {
+    const decrypted = connection.webhookAuthTokenCipher
+      ? decryptAsaasSecret(connection.webhookAuthTokenCipher)
+      : null;
+    if (decrypted && decrypted === token) {
+      return connection;
+    }
+  }
+
+  return null;
 }
 
 export async function markAsaasConnectionHealth(input: {

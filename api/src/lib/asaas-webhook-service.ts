@@ -32,11 +32,12 @@ function inferEventType(payload: Record<string, unknown>) {
 
 export async function processAsaasWebhook(input: {
   companyId: string;
+  legalEntityId: string;
   environment: ErpEnvironment;
   headers: Record<string, unknown>;
   payload: Record<string, unknown>;
 }): Promise<AsaasWebhookResult> {
-  const connection = await resolveAsaasConnection(input.companyId, input.environment);
+  const connection = await resolveAsaasConnection(input.companyId, input.legalEntityId, input.environment);
   const receivedToken = pickHeader(input.headers, "asaas-access-token");
   if (!connection.webhookAuthToken || receivedToken !== connection.webhookAuthToken) {
     throw new Error("Invalid ASAAS webhook token");

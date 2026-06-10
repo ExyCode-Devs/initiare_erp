@@ -86,7 +86,11 @@ export async function exportDraftToOmie(input: {
     throw new Error("Draft is missing required fields for OMIE export");
   }
 
-  const connection = await resolveOmieConnection(input.companyId, input.environment);
+  if (!draft.legalEntityId) {
+    throw new Error("Draft has no routed legal entity");
+  }
+
+  const connection = await resolveOmieConnection(input.companyId, draft.legalEntityId, input.environment);
   const duplicate = await prisma.erpSyncRecord.findUnique({
     where: {
       companyId_provider_environment_entityType_internalId: {

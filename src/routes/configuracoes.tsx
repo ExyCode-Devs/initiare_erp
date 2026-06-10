@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Bell, Brain, Building2, ChevronRight, Plug, Settings as SettingsIcon, Shield, Users, Zap } from "lucide-react";
 import { Card, PageHeader } from "@/components/app/primitives";
 import { InlineError, InlineState } from "@/components/app/state";
 import { apiRequest } from "@/lib/api";
-import type { AsaasSettingsResponse, OmieSettingsResponse } from "@/lib/api-types";
+import type { AsaasSettingsResponse, LegalEntitiesResponse, OmieSettingsResponse } from "@/lib/api-types";
 import { cn } from "@/lib/utils";
 
 type SettingsResponse = {
@@ -48,14 +48,65 @@ function Page() {
     queryKey: ["asaas-settings"],
     queryFn: () => apiRequest<AsaasSettingsResponse>("/settings/integrations/asaas")
   });
+  const legalEntitiesQuery = useQuery({
+    queryKey: ["legal-entities"],
+    queryFn: () => apiRequest<LegalEntitiesResponse>("/settings/legal-entities")
+  });
   const [active, setActive] = useState("integracoes");
   const [draftValues, setDraftValues] = useState<Record<string, { appKey: string; appSecret: string; baseUrl: string; enabled: boolean }>>({});
   const [asaasDraftValues, setAsaasDraftValues] = useState<Record<string, { apiKey: string; webhookAuthToken: string; baseUrl: string; enabled: boolean }>>({});
+  const [selectedLegalEntityId, setSelectedLegalEntityId] = useState<string>("");
+  const [entityForm, setEntityForm] = useState({
+    legalName: "",
+    tradeName: "",
+    cnpj: "",
+    active: true,
+    defaultRecipientEmails: "",
+    defaultMailboxIds: "",
+    notes: ""
+  });
+
+  useEffect(() => {
+    if (!selectedLegalEntityId && legalEntitiesQuery.data?.items[0]?.id) {
+      setSelectedLegalEntityId(legalEntitiesQuery.data.items[0].id);
+    }
+  }, [legalEntitiesQuery.data, selectedLegalEntityId]);
+
+  const selectedLegalEntity = useMemo(
+    () => legalEntitiesQuery.data?.items.find((item) => item.id === selectedLegalEntityId) ?? null,
+    [legalEntitiesQuery.data, selectedLegalEntityId]
+  );
+
+  useEffect(() => {
+    if (!selectedLegalEntity) {
+      return;
+    }
+
+    setEntityForm({
+      legalName: selectedLegalEntity.legalName,
+      tradeName: selectedLegalEntity.tradeName ?? "",
+      cnpj: selectedLegalEntity.cnpj,
+      active: selectedLegalEntity.active,
+      defaultRecipientEmails: selectedLegalEntity.defaultRecipientEmails.join(", "),
+      defaultMailboxIds: selectedLegalEntity.defaultMailboxIds.join(", "),
+      notes: selectedLegalEntity.notes ?? ""
+    });
+  }, [selectedLegalEntity]);
+
+  const selectedOmieEnvironments = useMemo(
+    () => omieQuery.data?.environments.filter((item) => item.legalEntityId === selectedLegalEntityId) ?? [],
+    [omieQuery.data, selectedLegalEntityId]
+  );
+  const selectedAsaasEnvironments = useMemo(
+    () => asaasQuery.data?.environments.filter((item) => item.legalEntityId === selectedLegalEntityId) ?? [],
+    [asaasQuery.data, selectedLegalEntityId]
+  );
 
   const refreshOmie = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["omie-settings"] }),
       queryClient.invalidateQueries({ queryKey: ["asaas-settings"] }),
+      queryClient.invalidateQueries({ queryKey: ["legal-entities"] }),
       queryClient.invalidateQueries({ queryKey: ["settings"] }),
       queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] }),
       queryClient.invalidateQueries({ queryKey: ["asaas-payments"] }),
@@ -64,7 +115,7 @@ function Page() {
   };
 
   const saveMutation = useMutation({
-    mutationFn: (input: { environment: "HOMOLOG" | "PRODUCTION"; appKey: string; appSecret: string; baseUrl: string; enabled: boolean }) =>
+    mutationFn: (input: { legalEntityId: string; environment: "HOMOLOG" | "PRODUCTION"; appKey: string; appSecret: string; baseUrl: string; enabled: boolean }) =>
       apiRequest(`/settings/integrations/omie/${input.environment}`, {
         method: "PUT",
         body: input
@@ -73,22 +124,26 @@ function Page() {
   });
 
   const testMutation = useMutation({
-    mutationFn: (environment: "HOMOLOG" | "PRODUCTION") =>
-      apiRequest(`/settings/integrations/omie/${environment}/test`, {
+    mutationFn: (input: { legalEntityId: string; environment: "HOMOLOG" | "PRODUCTION" }) =>
+      apiRequest(`/settings/integrations/omie/${input.environment}/test`, {
         method: "POST"
+        ,
+        body: { legalEntityId: input.legalEntityId }
       }),
     onSuccess: refreshOmie
   });
 
   const syncMutation = useMutation({
-    mutationFn: (environment: "HOMOLOG" | "PRODUCTION") =>
-      apiRequest(`/settings/integrations/omie/${environment}/sync-catalog`, {
+    mutationFn: (input: { legalEntityId: string; environment: "HOMOLOG" | "PRODUCTION" }) =>
+      apiRequest(`/settings/integrations/omie/${input.environment}/sync-catalog`, {
         method: "POST"
+        ,
+        body: { legalEntityId: input.legalEntityId }
       }),
     onSuccess: refreshOmie
   });
   const saveAsaasMutation = useMutation({
-    mutationFn: (input: { environment: "SANDBOX" | "PRODUCTION"; apiKey: string; webhookAuthToken: string; baseUrl: string; enabled: boolean }) =>
+    mutationFn: (input: { legalEntityId: string; environment: "SANDBOX" | "PRODUCTION"; apiKey: string; webhookAuthToken: string; baseUrl: string; enabled: boolean }) =>
       apiRequest(`/settings/integrations/asaas/${input.environment}`, {
         method: "PUT",
         body: input
@@ -96,18 +151,58 @@ function Page() {
     onSuccess: refreshOmie
   });
   const testAsaasMutation = useMutation({
-    mutationFn: (environment: "SANDBOX" | "PRODUCTION") =>
-      apiRequest(`/settings/integrations/asaas/${environment}/test`, {
+    mutationFn: (input: { legalEntityId: string; environment: "SANDBOX" | "PRODUCTION" }) =>
+      apiRequest(`/settings/integrations/asaas/${input.environment}/test`, {
         method: "POST"
+        ,
+        body: { legalEntityId: input.legalEntityId }
       }),
     onSuccess: refreshOmie
   });
   const syncAsaasMutation = useMutation({
-    mutationFn: (environment: "SANDBOX" | "PRODUCTION") =>
-      apiRequest(`/settings/integrations/asaas/${environment}/sync`, {
+    mutationFn: (input: { legalEntityId: string; environment: "SANDBOX" | "PRODUCTION" }) =>
+      apiRequest(`/settings/integrations/asaas/${input.environment}/sync`, {
         method: "POST"
+        ,
+        body: { legalEntityId: input.legalEntityId }
       }),
     onSuccess: refreshOmie
+  });
+  const saveLegalEntityMutation = useMutation({
+    mutationFn: (input: {
+      id?: string;
+      legalName: string;
+      tradeName: string;
+      cnpj: string;
+      active: boolean;
+      defaultRecipientEmails: string[];
+      defaultMailboxIds: string[];
+      notes: string;
+    }) =>
+      apiRequest(input.id ? `/settings/legal-entities/${input.id}` : "/settings/legal-entities", {
+        method: input.id ? "PATCH" : "POST",
+        body: {
+          legalName: input.legalName,
+          tradeName: input.tradeName || null,
+          cnpj: input.cnpj,
+          active: input.active,
+          defaultRecipientEmails: input.defaultRecipientEmails,
+          defaultMailboxIds: input.defaultMailboxIds,
+          notes: input.notes || null
+        }
+      }),
+    onSuccess: refreshOmie
+  });
+
+  const removeLegalEntityMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest(`/settings/legal-entities/${id}`, {
+        method: "DELETE"
+      }),
+    onSuccess: async () => {
+      setSelectedLegalEntityId("");
+      await refreshOmie();
+    }
   });
 
   if (isLoading) {
@@ -173,7 +268,29 @@ function Page() {
                   )}
                 </Card>
               ))}
-              {omieQuery.data?.environments.map((environment) => {
+              <Card className="p-4 md:col-span-2">
+                <div className="text-[13.5px] font-medium">Legal entity</div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {legalEntitiesQuery.data?.items.map((entity) => (
+                    <button
+                      key={entity.id}
+                      onClick={() => setSelectedLegalEntityId(entity.id)}
+                      className={cn(
+                        "rounded-md border px-3 py-2 text-[12px]",
+                        selectedLegalEntityId === entity.id ? "border-ai/40 bg-ai/10 text-ai" : "border-border hover:bg-accent"
+                      )}
+                    >
+                      {entity.tradeName || entity.legalName}
+                    </button>
+                  ))}
+                </div>
+                {selectedLegalEntity ? (
+                  <div className="mt-3 text-[12px] text-muted-foreground">
+                    Route aliases: {selectedLegalEntity.defaultRecipientEmails.join(", ") || "none"}.
+                  </div>
+                ) : null}
+              </Card>
+              {selectedOmieEnvironments.map((environment) => {
                 const values = draftValues[environment.environment] ?? {
                   appKey: "",
                   appSecret: "",
@@ -252,21 +369,24 @@ function Page() {
 
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button
-                        onClick={() => saveMutation.mutate({ environment: environment.environment, ...values })}
+                        onClick={() =>
+                          selectedLegalEntityId &&
+                          saveMutation.mutate({ legalEntityId: selectedLegalEntityId, environment: environment.environment, ...values })
+                        }
                         disabled={saveMutation.isPending}
                         className="text-[12px] px-2.5 py-1.5 rounded-md border border-border hover:bg-accent disabled:opacity-60"
                       >
                         Salvar
                       </button>
                       <button
-                        onClick={() => testMutation.mutate(environment.environment)}
+                        onClick={() => selectedLegalEntityId && testMutation.mutate({ legalEntityId: selectedLegalEntityId, environment: environment.environment })}
                         disabled={testMutation.isPending}
                         className="text-[12px] px-2.5 py-1.5 rounded-md border border-border hover:bg-accent disabled:opacity-60"
                       >
                         Testar conexao
                       </button>
                       <button
-                        onClick={() => syncMutation.mutate(environment.environment)}
+                        onClick={() => selectedLegalEntityId && syncMutation.mutate({ legalEntityId: selectedLegalEntityId, environment: environment.environment })}
                         disabled={syncMutation.isPending}
                         className="text-[12px] px-2.5 py-1.5 rounded-md border border-border hover:bg-accent disabled:opacity-60"
                       >
@@ -276,7 +396,7 @@ function Page() {
                   </Card>
                 );
               })}
-              {asaasQuery.data?.environments.map((environment) => {
+              {selectedAsaasEnvironments.map((environment) => {
                 const values = asaasDraftValues[environment.environment] ?? {
                   apiKey: "",
                   webhookAuthToken: "",
@@ -355,21 +475,24 @@ function Page() {
 
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button
-                        onClick={() => saveAsaasMutation.mutate({ environment: environment.environment, ...values })}
+                        onClick={() =>
+                          selectedLegalEntityId &&
+                          saveAsaasMutation.mutate({ legalEntityId: selectedLegalEntityId, environment: environment.environment, ...values })
+                        }
                         disabled={saveAsaasMutation.isPending}
                         className="text-[12px] px-2.5 py-1.5 rounded-md border border-border hover:bg-accent disabled:opacity-60"
                       >
                         Salvar
                       </button>
                       <button
-                        onClick={() => testAsaasMutation.mutate(environment.environment)}
+                        onClick={() => selectedLegalEntityId && testAsaasMutation.mutate({ legalEntityId: selectedLegalEntityId, environment: environment.environment })}
                         disabled={testAsaasMutation.isPending}
                         className="text-[12px] px-2.5 py-1.5 rounded-md border border-border hover:bg-accent disabled:opacity-60"
                       >
                         Testar conexao
                       </button>
                       <button
-                        onClick={() => syncAsaasMutation.mutate(environment.environment)}
+                        onClick={() => selectedLegalEntityId && syncAsaasMutation.mutate({ legalEntityId: selectedLegalEntityId, environment: environment.environment })}
                         disabled={syncAsaasMutation.isPending}
                         className="text-[12px] px-2.5 py-1.5 rounded-md border border-border hover:bg-accent disabled:opacity-60"
                       >
@@ -409,6 +532,46 @@ function Page() {
               <div>
                 <div className="text-[13.5px] font-medium">Empresas gerenciadas</div>
                 <div className="text-[12px] text-muted-foreground mt-0.5">{data.company.companiesCount}</div>
+              </div>
+              <div className="rounded-xl border border-border bg-background/60 p-4 space-y-3">
+                <div className="text-[13.5px] font-medium">Legal entities</div>
+                <input value={entityForm.legalName} onChange={(event) => setEntityForm((current) => ({ ...current, legalName: event.target.value }))} className="h-9 w-full rounded-md border border-border bg-background px-3 text-[12.5px]" placeholder="Legal name" />
+                <input value={entityForm.tradeName} onChange={(event) => setEntityForm((current) => ({ ...current, tradeName: event.target.value }))} className="h-9 w-full rounded-md border border-border bg-background px-3 text-[12.5px]" placeholder="Trade name" />
+                <input value={entityForm.cnpj} onChange={(event) => setEntityForm((current) => ({ ...current, cnpj: event.target.value }))} className="h-9 w-full rounded-md border border-border bg-background px-3 text-[12.5px]" placeholder="CNPJ" />
+                <input value={entityForm.defaultRecipientEmails} onChange={(event) => setEntityForm((current) => ({ ...current, defaultRecipientEmails: event.target.value }))} className="h-9 w-full rounded-md border border-border bg-background px-3 text-[12.5px]" placeholder="Recipient aliases, comma separated" />
+                <input value={entityForm.defaultMailboxIds} onChange={(event) => setEntityForm((current) => ({ ...current, defaultMailboxIds: event.target.value }))} className="h-9 w-full rounded-md border border-border bg-background px-3 text-[12.5px]" placeholder="Mailbox ids, comma separated" />
+                <textarea value={entityForm.notes} onChange={(event) => setEntityForm((current) => ({ ...current, notes: event.target.value }))} className="min-h-[90px] w-full rounded-md border border-border bg-background px-3 py-2 text-[12.5px]" placeholder="Notes" />
+                <label className="h-9 rounded-md border border-border bg-background px-3 text-[12.5px] inline-flex items-center gap-2">
+                  <input type="checkbox" checked={entityForm.active} onChange={(event) => setEntityForm((current) => ({ ...current, active: event.target.checked }))} />
+                  Active
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() =>
+                      saveLegalEntityMutation.mutate({
+                        id: selectedLegalEntity?.id,
+                        legalName: entityForm.legalName,
+                        tradeName: entityForm.tradeName,
+                        cnpj: entityForm.cnpj,
+                        active: entityForm.active,
+                        defaultRecipientEmails: entityForm.defaultRecipientEmails.split(",").map((item) => item.trim()).filter(Boolean),
+                        defaultMailboxIds: entityForm.defaultMailboxIds.split(",").map((item) => item.trim()).filter(Boolean),
+                        notes: entityForm.notes
+                      })
+                    }
+                    className="text-[12px] px-2.5 py-1.5 rounded-md border border-border hover:bg-accent"
+                  >
+                    {selectedLegalEntity ? "Update legal entity" : "Create legal entity"}
+                  </button>
+                  {selectedLegalEntity && !selectedLegalEntity.isDefault ? (
+                    <button
+                      onClick={() => removeLegalEntityMutation.mutate(selectedLegalEntity.id)}
+                      className="text-[12px] px-2.5 py-1.5 rounded-md border border-destructive/30 text-destructive hover:bg-destructive/5"
+                    >
+                      Delete legal entity
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </Card>
           ) : null}

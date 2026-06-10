@@ -147,6 +147,9 @@ describe("omie routes", () => {
       url: "/api/settings/integrations/omie/HOMOLOG/test",
       headers: {
         authorization: `Bearer ${token}`
+      },
+      payload: {
+        legalEntityId: "legal-1"
       }
     });
 

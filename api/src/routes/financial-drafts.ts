@@ -1,7 +1,8 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { ErpEnvironment, ErpProvider, ErpSyncEntityType } from "@prisma/client";
+import { DraftRouteSource, DraftRoutingStatus, ErpEnvironment, ErpProvider, ErpSyncEntityType } from "@prisma/client";
 import { approveDraft, patchDraftFields, rejectDraft } from "../lib/draft-workflow.js";
+import { getLegalEntityOrThrow } from "../lib/legal-entities.js";
 import { exportDraftToOmie } from "../lib/omie-export-service.js";
 import { prisma } from "../lib/prisma.js";
 
@@ -54,6 +55,7 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
         direction: query.direction as never | undefined
       },
       include: {
+        legalEntity: true,
         sourceEvent: true,
         sourceEmail: true,
         erpSyncRecords: {
@@ -87,6 +89,11 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
         suggestedCategory: item.suggestedCategory,
         finalCategory: item.finalCategory,
         paymentMethod: item.paymentMethod,
+        legalEntityId: item.legalEntityId,
+        legalEntityName: item.legalEntity?.tradeName ?? item.legalEntity?.legalName ?? null,
+        routingStatus: item.routingStatus,
+        routingReason: item.routingReason,
+        routeSource: item.routeSource,
         confidenceScore: item.confidenceScore,
         confidenceBand: item.confidenceBand,
         status: item.status,
@@ -132,6 +139,7 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
         companyId: request.user.companyId
       },
       include: {
+        legalEntity: true,
         sourceEvent: true,
         aiRun: true,
         sourceEmail: {
@@ -188,6 +196,11 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
       suggestedCategory: item.suggestedCategory,
       finalCategory: item.finalCategory,
       paymentMethod: item.paymentMethod,
+      legalEntityId: item.legalEntityId,
+      legalEntityName: item.legalEntity?.tradeName ?? item.legalEntity?.legalName ?? null,
+      routingStatus: item.routingStatus,
+      routingReason: item.routingReason,
+      routeSource: item.routeSource,
       bankData: item.bankData,
       notes: item.notes,
       confidenceScore: item.confidenceScore,
@@ -303,9 +316,14 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
           finalCategory: z.string().nullable().optional(),
           paymentMethod: z.string().nullable().optional(),
           bankData: z.record(z.string(), z.unknown()).nullable().optional(),
-          notes: z.string().nullable().optional()
+          notes: z.string().nullable().optional(),
+          legalEntityId: z.string().nullable().optional()
         })
         .parse(request.body);
+
+      if (payload.legalEntityId) {
+        await getLegalEntityOrThrow(request.user.companyId, payload.legalEntityId);
+      }
 
       const draft = await patchDraftFields({
         draftId: params.id,
@@ -315,7 +333,12 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
           name: request.user.name,
           email: request.user.email
         },
-        values: payload
+        values: {
+          ...payload,
+          routingStatus: payload.legalEntityId ? DraftRoutingStatus.ROUTED : undefined,
+          routeSource: payload.legalEntityId ? DraftRouteSource.MANUAL : undefined,
+          routingReason: payload.legalEntityId ? "Legal entity manually assigned by analyst" : undefined
+        }
       });
 
       return {

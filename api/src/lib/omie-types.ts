@@ -14,6 +14,8 @@ export type OmieResolvedConnection = ErpConnection & {
 
 export type OmieConnectionSummary = {
   id: string;
+  legalEntityId: string;
+  legalEntityName: string;
   provider: ErpProvider;
   environment: ErpEnvironment;
   baseUrl: string;

@@ -70,10 +70,11 @@ async function upsertSyncRecord(input: {
 
 export async function syncOmieCatalogs(input: {
   companyId: string;
+  legalEntityId: string;
   environment: ErpEnvironment;
   triggeredByUserId: string;
 }): Promise<OmieCatalogSyncResult> {
-  const connection = await resolveOmieConnection(input.companyId, input.environment);
+  const connection = await resolveOmieConnection(input.companyId, input.legalEntityId, input.environment);
   const client = new OmieClient(connection);
   const context = {
     companyId: input.companyId,

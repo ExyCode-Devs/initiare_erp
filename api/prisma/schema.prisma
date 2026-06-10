@@ -166,6 +166,18 @@ enum ErpOperationStatus {
   ERROR
 }
 
+enum DraftRoutingStatus {
+  ROUTED
+  UNROUTED
+}
+
+enum DraftRouteSource {
+  CNPJ
+  MAILBOX
+  MANUAL
+  UNKNOWN
+}
+
 model Company {
   id                        String                       @id @default(cuid())
   name                      String
@@ -214,10 +226,34 @@ model Company {
   processingJobRuns         ProcessingJobRun[]
   changelogEntries          ChangelogEntry[]
   changelogReads            ChangelogRead[]
+  legalEntities             LegalEntity[]
   erpConnections            ErpConnection[]
   erpSyncRecords            ErpSyncRecord[]
   erpRequestLogs            ErpRequestLog[]
   erpWebhookEvents          ErpWebhookEvent[]
+}
+
+model LegalEntity {
+  id                     String           @id @default(cuid())
+  companyId              String
+  legalName              String
+  tradeName              String?
+  cnpj                   String
+  active                 Boolean          @default(true)
+  isDefault              Boolean          @default(false)
+  defaultRecipientEmails Json?
+  defaultMailboxIds      Json?
+  notes                  String?          @db.Text
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+  company                Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  erpConnections         ErpConnection[]
+  financialDrafts        FinancialDraft[]
+  aiEventSources         AiEventSource[]
+  inboundEmails          InboundEmail[]
+
+  @@unique([companyId, cnpj])
+  @@index([companyId, active])
 }
 
 model User {
@@ -280,8 +316,10 @@ model InboundEmail {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   companyId         String
+  legalEntityId     String?
   mailboxId         String
   company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  legalEntity       LegalEntity?      @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
   mailbox           MailboxAccount    @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
   attachments       EmailAttachment[]
   extractionRuns    N8nExtractionRun[]
@@ -289,6 +327,7 @@ model InboundEmail {
 
   @@index([companyId, status, receivedAt])
   @@index([mailboxId, receivedAt])
+  @@index([legalEntityId, receivedAt])
 }
 
 model EmailAttachment {
@@ -362,11 +401,16 @@ model FinancialDraft {
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
   companyId            String
+  legalEntityId        String?
   sourceEmailId        String?
   extractionRunId      String?            @unique
   sourceEventId        String?
   aiRunId              String?            @unique
+  routingStatus        DraftRoutingStatus @default(UNROUTED)
+  routeSource          DraftRouteSource   @default(UNKNOWN)
+  routingReason        String?
   company              Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  legalEntity          LegalEntity?       @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
   sourceEmail          InboundEmail?      @relation(fields: [sourceEmailId], references: [id], onDelete: Cascade)
   extractionRun        N8nExtractionRun?  @relation(fields: [extractionRunId], references: [id], onDelete: SetNull)
   sourceEvent          AiEventSource?     @relation(fields: [sourceEventId], references: [id], onDelete: SetNull)
@@ -376,6 +420,7 @@ model FinancialDraft {
   erpRequestLogs       ErpRequestLog[]
 
   @@index([companyId, status, confidenceBand])
+  @@index([legalEntityId, status, createdAt])
   @@index([sourceEmailId])
   @@index([sourceEventId])
 }
@@ -713,13 +758,15 @@ model ErpConnection {
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
   companyId            String
+  legalEntityId        String
   company              Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  legalEntity          LegalEntity     @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
   syncRecords          ErpSyncRecord[]
   requestLogs          ErpRequestLog[]
   webhookEvents        ErpWebhookEvent[]
 
-  @@unique([companyId, provider, environment])
-  @@index([companyId, provider, enabled])
+  @@unique([legalEntityId, provider, environment])
+  @@index([companyId, legalEntityId, provider, enabled])
 }
 
 model ErpSyncRecord {
@@ -815,13 +862,19 @@ model AiEventSource {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   companyId       String
+  legalEntityId   String?
+  routingStatus   DraftRoutingStatus @default(UNROUTED)
+  routeSource     DraftRouteSource   @default(UNKNOWN)
+  routingReason   String?
   company         Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  legalEntity     LegalEntity?      @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
   aiRuns          AiGatewayRun[]
   financialDrafts FinancialDraft[]
 
   @@unique([companyId, eventId])
   @@index([companyId, receivedAt])
   @@index([companyId, status, createdAt])
+  @@index([legalEntityId, createdAt])
 }
 
 model AiGatewayRun {

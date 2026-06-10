@@ -13,7 +13,7 @@ import {
 import { InlineError, InlineState } from "@/components/app/state";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/api";
-import type { FinancialDraftDetailResponse, FinancialDraftListResponse } from "@/lib/api-types";
+import type { FinancialDraftDetailResponse, FinancialDraftListResponse, LegalEntitiesResponse } from "@/lib/api-types";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +28,7 @@ type DraftFormState = {
   finalCategory: string;
   paymentMethod: string;
   notes: string;
+  legalEntityId: string;
 };
 
 const emptyDraftForm: DraftFormState = {
@@ -41,6 +42,7 @@ const emptyDraftForm: DraftFormState = {
   finalCategory: "",
   paymentMethod: "",
   notes: "",
+  legalEntityId: "",
 };
 
 export const Route = createFileRoute("/validacao-financeira")({
@@ -174,6 +176,10 @@ function ValidacaoFinanceiraPage() {
     queryFn: () => apiRequest<FinancialDraftDetailResponse>(`/financial-drafts/${selectedDraftId}`),
     enabled: Boolean(selectedDraftId),
   });
+  const legalEntitiesQuery = useQuery({
+    queryKey: ["legal-entities"],
+    queryFn: () => apiRequest<LegalEntitiesResponse>("/settings/legal-entities"),
+  });
 
   useEffect(() => {
     if (!detailQuery.data) {
@@ -191,6 +197,7 @@ function ValidacaoFinanceiraPage() {
       finalCategory: detailQuery.data.finalCategory ?? "",
       paymentMethod: detailQuery.data.paymentMethod ?? "",
       notes: detailQuery.data.notes ?? "",
+      legalEntityId: detailQuery.data.legalEntityId ?? "",
     });
     setRejectReason(detailQuery.data.rejectionReason ?? "");
   }, [detailQuery.data]);
@@ -222,6 +229,7 @@ function ValidacaoFinanceiraPage() {
           finalCategory: formState.finalCategory || null,
           paymentMethod: formState.paymentMethod || null,
           notes: formState.notes || null,
+          legalEntityId: formState.legalEntityId || null,
         },
       }),
     onSuccess: refreshAll,
@@ -426,6 +434,14 @@ function ValidacaoFinanceiraPage() {
                     <input value={formState.paymentMethod} onChange={(event) => setFormState((current) => ({ ...current, paymentMethod: event.target.value }))} className="h-9 rounded-md border border-border bg-background px-3 text-[12.5px]" placeholder="Metodo" disabled={!canReview} />
                     <input value={formState.suggestedCategory} onChange={(event) => setFormState((current) => ({ ...current, suggestedCategory: event.target.value }))} className="h-9 rounded-md border border-border bg-background px-3 text-[12.5px]" placeholder="Categoria sugerida" disabled={!canReview} />
                     <input value={formState.finalCategory} onChange={(event) => setFormState((current) => ({ ...current, finalCategory: event.target.value }))} className="h-9 rounded-md border border-border bg-background px-3 text-[12.5px]" placeholder="Categoria final" disabled={!canReview} />
+                    <select value={formState.legalEntityId} onChange={(event) => setFormState((current) => ({ ...current, legalEntityId: event.target.value }))} className="h-9 rounded-md border border-border bg-background px-3 text-[12.5px] col-span-2" disabled={!canReview}>
+                      <option value="">Sem roteamento</option>
+                      {legalEntitiesQuery.data?.items.map((entity) => (
+                        <option key={entity.id} value={entity.id}>
+                          {entity.tradeName || entity.legalName}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <textarea value={formState.description} onChange={(event) => setFormState((current) => ({ ...current, description: event.target.value }))} className="min-h-[110px] w-full rounded-md border border-border bg-background px-3 py-2 text-[12.5px]" placeholder="Descricao" disabled={!canReview} />
                   <textarea value={formState.notes} onChange={(event) => setFormState((current) => ({ ...current, notes: event.target.value }))} className="min-h-[90px] w-full rounded-md border border-border bg-background px-3 py-2 text-[12.5px]" placeholder="Notas internas" disabled={!canReview} />
@@ -545,6 +561,12 @@ function ValidacaoFinanceiraPage() {
                       )}
                     </div>
                   </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <StatusBadge status={humanStatus(detail.routingStatus)} />
+                    <StatusBadge status={detail.routeSource} />
+                    <StatusBadge status={detail.legalEntityName ?? "Sem entidade"} />
+                  </div>
+                  {detail.routingReason ? <div className="mt-2 text-[12px] text-muted-foreground">{detail.routingReason}</div> : null}
                 </div>
               </div>
 

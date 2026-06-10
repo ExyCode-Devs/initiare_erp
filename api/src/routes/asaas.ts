@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { AsaasClient } from "../lib/asaas-client.js";
 import {
+  findAsaasConnectionByWebhookToken,
   listAsaasConnections,
   markAsaasConnectionHealth,
   resolveAsaasConnection,
@@ -13,6 +14,19 @@ import { mapAsaasReceivableRow, syncAsaasData } from "../lib/asaas-sync-service.
 import { prisma } from "../lib/prisma.js";
 
 const environmentSchema = z.enum(["SANDBOX", "PRODUCTION"]);
+const legalEntityBodySchema = z.object({
+  legalEntityId: z.string().min(1)
+});
+
+function pickHeader(headers: Record<string, unknown>, key: string) {
+  const direct = headers[key];
+  if (typeof direct === "string") {
+    return direct;
+  }
+
+  const lower = headers[key.toLowerCase()];
+  return typeof lower === "string" ? lower : null;
+}
 
 const asaasRoutes: FastifyPluginAsync = async (app) => {
   app.post("/integrations/asaas/webhook/:environment", async (request, reply) => {
@@ -20,12 +34,20 @@ const asaasRoutes: FastifyPluginAsync = async (app) => {
     const payload = z.record(z.string(), z.unknown()).parse(request.body ?? {});
 
     try {
-      const company = await prisma.company.findFirstOrThrow({
-        orderBy: { createdAt: "asc" }
-      });
+      const webhookToken = pickHeader(request.headers as Record<string, unknown>, "asaas-access-token");
+      if (!webhookToken) {
+        reply.code(401).send({ message: "Missing ASAAS webhook token" });
+        return;
+      }
+      const connection = await findAsaasConnectionByWebhookToken(params.environment as ErpEnvironment, webhookToken);
+      if (!connection) {
+        reply.code(401).send({ message: "Invalid ASAAS webhook token" });
+        return;
+      }
 
       const result = await processAsaasWebhook({
-        companyId: company.id,
+        companyId: connection.companyId,
+        legalEntityId: connection.legalEntityId,
         environment: params.environment as ErpEnvironment,
         headers: request.headers as Record<string, unknown>,
         payload
@@ -60,6 +82,7 @@ const asaasRoutes: FastifyPluginAsync = async (app) => {
         const params = z.object({ environment: environmentSchema }).parse(request.params);
         const payload = z
           .object({
+            legalEntityId: z.string().min(1),
             apiKey: z.string().trim().optional().nullable(),
             webhookAuthToken: z.string().trim().optional().nullable(),
             baseUrl: z.string().trim().optional().nullable(),
@@ -69,6 +92,7 @@ const asaasRoutes: FastifyPluginAsync = async (app) => {
 
         const record = await saveAsaasConnection({
           companyId: request.user.companyId,
+          legalEntityId: payload.legalEntityId,
           environment: params.environment as ErpEnvironment,
           apiKey: payload.apiKey ?? null,
           webhookAuthToken: payload.webhookAuthToken ?? null,
@@ -94,7 +118,12 @@ const asaasRoutes: FastifyPluginAsync = async (app) => {
       },
       async (request) => {
         const params = z.object({ environment: environmentSchema }).parse(request.params);
-        const connection = await resolveAsaasConnection(request.user.companyId, params.environment as ErpEnvironment);
+        const payload = legalEntityBodySchema.parse(request.body ?? {});
+        const connection = await resolveAsaasConnection(
+          request.user.companyId,
+          payload.legalEntityId,
+          params.environment as ErpEnvironment
+        );
         const client = new AsaasClient(connection);
 
         try {
@@ -134,9 +163,11 @@ const asaasRoutes: FastifyPluginAsync = async (app) => {
       },
       async (request) => {
         const params = z.object({ environment: environmentSchema }).parse(request.params);
+        const payload = legalEntityBodySchema.parse(request.body ?? {});
 
         return syncAsaasData({
           companyId: request.user.companyId,
+          legalEntityId: payload.legalEntityId,
           environment: params.environment as ErpEnvironment,
           triggeredByUserId: request.user.sub
         });
