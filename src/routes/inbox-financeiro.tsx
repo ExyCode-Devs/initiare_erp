@@ -258,7 +258,7 @@ function InboxFinanceiroPage() {
     <div className="max-w-[1480px] mx-auto px-6 py-8 space-y-6">
       <PageHeader
         title="Inbox Financeiro"
-        desc="Emails financeiros entram por IMAP, passam por extracao n8n e caem em fila de validacao."
+        desc="Inbox operacional e o ponto primario de entrada. Emails viram pre-entradas para revisao humana."
         actions={
           <button
             onClick={() => void refreshQueries()}
@@ -365,7 +365,7 @@ function InboxFinanceiroPage() {
         <Card className="p-5">
           <SectionHeader
             title="Novo mailbox"
-            desc="Admin cadastra IMAP de origem. n8n entra depois, nao aqui."
+            desc="Admin cadastra o inbox operacional. Processamento fica sempre dentro da fila revisavel."
           />
           {user?.role !== "ADMIN" ? (
             <div className="rounded-lg border border-border bg-background/60 px-3 py-3 text-[12.5px] text-muted-foreground">

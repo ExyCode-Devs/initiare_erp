@@ -304,7 +304,7 @@ function ValidacaoFinanceiraPage() {
     <div className="max-w-[1480px] mx-auto px-6 py-8 space-y-6">
       <PageHeader
         title="Validacao Financeira"
-        desc="Fila humana para editar, aprovar ou rejeitar drafts vindos de AI events."
+        desc="Fila humana para editar, aprovar ou rejeitar pre-entradas vindas do intake financeiro."
       />
 
       {!canReview ? (
@@ -424,7 +424,7 @@ function ValidacaoFinanceiraPage() {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="space-y-4">
-                  <SectionHeader title="Campos extraidos" desc="App valida e decide. Active Actions envia evento normalizado." />
+                  <SectionHeader title="Campos extraidos" desc="App valida e decide. Inbox e adaptadores alimentam a mesma fila revisavel." />
                   <div className="grid grid-cols-2 gap-3">
                     <input value={formState.partyName} onChange={(event) => setFormState((current) => ({ ...current, partyName: event.target.value }))} className="h-9 rounded-md border border-border bg-background px-3 text-[12.5px]" placeholder="Parte" disabled={!canReview} />
                     <input value={formState.cpfCnpj} onChange={(event) => setFormState((current) => ({ ...current, cpfCnpj: event.target.value }))} className="h-9 rounded-md border border-border bg-background px-3 text-[12.5px]" placeholder="CPF/CNPJ" disabled={!canReview} />

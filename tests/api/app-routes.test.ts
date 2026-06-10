@@ -298,7 +298,7 @@ describe("app routes", () => {
     expect(aiDraftServiceMock.ingestExternalNormalizedDraft).not.toHaveBeenCalled();
   });
 
-  it("returns 410 for legacy webhook and inbox routes", async () => {
+  it("keeps only legacy webhook route disabled", async () => {
     const webhookResponse = await app.inject({
       method: "POST",
       url: "/api/webhooks/invoices",
@@ -313,7 +313,7 @@ describe("app routes", () => {
     });
 
     expect(webhookResponse.statusCode).toBe(410);
-    expect(mailboxResponse.statusCode).toBe(410);
-    expect(inboxResponse.statusCode).toBe(410);
+    expect(mailboxResponse.statusCode).toBe(401);
+    expect(inboxResponse.statusCode).toBe(401);
   });
 });

@@ -7,10 +7,10 @@ const automationRoutes: FastifyPluginAsync = async (app) => {
   app.get("/automation/summary", async (request) => {
     const companyId = request.user.companyId;
     const [
-      events,
+      emails,
       drafts,
-      gatewayRuns,
-      totalEvents,
+      jobRuns,
+      totalEmails,
       processed,
       errorCount,
       pendingReview,
@@ -18,7 +18,7 @@ const automationRoutes: FastifyPluginAsync = async (app) => {
       rejected,
       lowConfidence,
     ] = await Promise.all([
-      prisma.aiEventSource.findMany({
+      prisma.inboundEmail.findMany({
         where: { companyId },
         orderBy: { receivedAt: "desc" },
         take: 10,
@@ -26,24 +26,26 @@ const automationRoutes: FastifyPluginAsync = async (app) => {
       prisma.financialDraft.findMany({
         where: { companyId },
       }),
-      prisma.aiGatewayRun.findMany({
+      prisma.processingJobRun.findMany({
         where: { companyId },
         orderBy: { startedAt: "desc" },
         take: 5,
       }),
-      prisma.aiEventSource.count({
+      prisma.inboundEmail.count({
         where: { companyId },
       }),
-      prisma.aiEventSource.count({
+      prisma.inboundEmail.count({
         where: {
           companyId,
-          status: "PROCESSED",
+          status: {
+            in: ["PROCESSADO", "AGUARDANDO_VALIDACAO", "APROVADO"],
+          },
         },
       }),
-      prisma.aiGatewayRun.count({
+      prisma.processingJobRun.count({
         where: {
           companyId,
-          status: "ERRO",
+          status: "FAILED",
         },
       }),
       prisma.financialDraft.count({
@@ -78,7 +80,7 @@ const automationRoutes: FastifyPluginAsync = async (app) => {
 
     return {
       stats: {
-        totalEmails: totalEvents,
+        totalEmails,
         processed,
         errorCount,
         pendingReview,
@@ -87,22 +89,22 @@ const automationRoutes: FastifyPluginAsync = async (app) => {
         lowConfidence,
         volume,
       },
-      latestEmails: events.map((item) => ({
+      latestEmails: emails.map((item) => ({
         id: item.id,
-        sender: item.sender ?? item.channel,
-        subject: item.subject ?? item.summary ?? item.channel,
+        sender: item.sender,
+        subject: item.subject,
         status: item.status,
         receivedAt: item.receivedAt.toISOString(),
       })),
-      latestRuns: gatewayRuns.map((item) => ({
+      latestRuns: jobRuns.map((item) => ({
         id: item.id,
-        runType: item.provider,
-        status: item.status === "SUCESSO" ? "COMPLETED" : item.status === "ERRO" ? "FAILED" : "RUNNING",
-        fetchedCount: 1,
-        processedCount: item.status === "SUCESSO" ? 1 : 0,
-        errorCount: item.status === "ERRO" ? 1 : 0,
+        runType: item.runType,
+        status: item.status,
+        fetchedCount: item.fetchedCount,
+        processedCount: item.processedCount,
+        errorCount: item.errorCount,
         startedAt: item.startedAt.toISOString(),
-        finishedAt: item.completedAt?.toISOString() ?? null,
+        finishedAt: item.finishedAt?.toISOString() ?? null,
       })),
     };
   });

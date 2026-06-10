@@ -291,7 +291,7 @@ function Dashboard() {
             <Card className="lg:col-span-2 p-5">
               <SectionHeader
                 title="Automacao financeira"
-                desc="Active Actions envia AI events. App revisa e aprova."
+                desc="Inbox operacional e eventos adaptados alimentam a mesma fila revisavel."
               />
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Stat
@@ -318,7 +318,7 @@ function Dashboard() {
               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="rounded-xl border border-border bg-background/60 p-4">
                   <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
-                    Ultimos eventos
+                    Ultimas entradas
                   </div>
                   <div className="space-y-2">
                     {automationQuery.data.latestEmails.map((item) => (
@@ -349,7 +349,7 @@ function Dashboard() {
                 </div>
                 <div className="rounded-xl border border-border bg-background/60 p-4">
                   <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
-                    AI runs
+                    Ultimos jobs
                   </div>
                   <div className="space-y-2">
                     {automationQuery.data.latestRuns.map((item) => (

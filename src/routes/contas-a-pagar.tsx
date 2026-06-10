@@ -58,7 +58,7 @@ function Page() {
     <div className="max-w-[1480px] mx-auto px-6 py-8 space-y-6">
       <PageHeader
         title="Contas a pagar"
-        desc="Pipeline de pagamentos com persistencia real no banco, vindo de AI events."
+        desc="Pipeline de pagamentos com persistencia real no banco, vindo da fila de intake financeiro."
         actions={
           <>
             <button className="h-9 px-3 inline-flex items-center gap-1.5 rounded-md border border-border text-[12.5px] hover:bg-accent">
@@ -106,7 +106,7 @@ function Page() {
             {data.items.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
-                  Nenhuma conta recebida ainda. Envie um AI event para <code>/api/ai/events/financial-drafts</code>.
+                  Nenhuma conta recebida ainda. Aguarde intake pelo inbox operacional ou adaptador configurado.
                 </td>
               </tr>
             ) : null}
