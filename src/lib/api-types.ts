@@ -164,6 +164,21 @@ export interface FinancialDraftListResponse {
   items: Array<{
     review: {
       workflowStatus: string;
+      execution: {
+        provider: string;
+        environment: string;
+        status: string;
+        queuedAt: string | null;
+        startedAt: string | null;
+        finishedAt: string | null;
+        retryCount: number;
+        lastError: string | null;
+        externalPartyId: string | null;
+        externalEntryId: string | null;
+        requestPayload: unknown;
+        responsePayload: unknown;
+        billingArtifact: unknown;
+      } | null;
       blockers: Array<{
         code: string;
         message: string;
@@ -214,6 +229,21 @@ export interface FinancialDraftListResponse {
 export interface FinancialDraftDetailResponse {
   review: {
     workflowStatus: string;
+    execution: {
+      provider: string;
+      environment: string;
+      status: string;
+      queuedAt: string | null;
+      startedAt: string | null;
+      finishedAt: string | null;
+      retryCount: number;
+      lastError: string | null;
+      externalPartyId: string | null;
+      externalEntryId: string | null;
+      requestPayload: unknown;
+      responsePayload: unknown;
+      billingArtifact: unknown;
+    } | null;
     blockers: Array<{
       code: string;
       message: string;

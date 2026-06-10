@@ -16,6 +16,8 @@ type WorkflowState =
   | "completed"
   | "answered";
 
+export type DraftExecutionStatus = "idle" | "queued" | "running" | "success" | "error";
+
 type WorkflowBlockerCode =
   | "missing_party_name"
   | "missing_amount"
@@ -42,6 +44,21 @@ type WorkflowMetadata = {
   reprocessRequestedByUserId?: string | null;
   reprocessNote?: string | null;
   lastEditedAt?: string | null;
+  execution?: {
+    provider?: string | null;
+    environment?: string | null;
+    status?: DraftExecutionStatus;
+    queuedAt?: string | null;
+    startedAt?: string | null;
+    finishedAt?: string | null;
+    retryCount?: number;
+    lastError?: string | null;
+    externalPartyId?: string | null;
+    externalEntryId?: string | null;
+    requestPayload?: unknown;
+    responsePayload?: unknown;
+    billingArtifact?: unknown;
+  } | null;
 };
 
 type DraftForReview = {
@@ -72,6 +89,7 @@ function asObject(value: unknown): Record<string, unknown> {
 function getWorkflowMetadata(rawPayload: unknown): WorkflowMetadata {
   const base = asObject(rawPayload);
   const workflow = asObject(base._workflow);
+  const execution = asObject(workflow.execution);
 
   return {
     reviewState: typeof workflow.reviewState === "string" ? (workflow.reviewState as WorkflowState) : undefined,
@@ -85,7 +103,25 @@ function getWorkflowMetadata(rawPayload: unknown): WorkflowMetadata {
     reprocessRequestedByUserId:
       typeof workflow.reprocessRequestedByUserId === "string" ? workflow.reprocessRequestedByUserId : null,
     reprocessNote: typeof workflow.reprocessNote === "string" ? workflow.reprocessNote : null,
-    lastEditedAt: typeof workflow.lastEditedAt === "string" ? workflow.lastEditedAt : null
+    lastEditedAt: typeof workflow.lastEditedAt === "string" ? workflow.lastEditedAt : null,
+    execution:
+      Object.keys(execution).length === 0
+        ? null
+        : {
+            provider: typeof execution.provider === "string" ? execution.provider : null,
+            environment: typeof execution.environment === "string" ? execution.environment : null,
+            status: typeof execution.status === "string" ? (execution.status as DraftExecutionStatus) : "idle",
+            queuedAt: typeof execution.queuedAt === "string" ? execution.queuedAt : null,
+            startedAt: typeof execution.startedAt === "string" ? execution.startedAt : null,
+            finishedAt: typeof execution.finishedAt === "string" ? execution.finishedAt : null,
+            retryCount: typeof execution.retryCount === "number" ? execution.retryCount : 0,
+            lastError: typeof execution.lastError === "string" ? execution.lastError : null,
+            externalPartyId: typeof execution.externalPartyId === "string" ? execution.externalPartyId : null,
+            externalEntryId: typeof execution.externalEntryId === "string" ? execution.externalEntryId : null,
+            requestPayload: execution.requestPayload ?? null,
+            responsePayload: execution.responsePayload ?? null,
+            billingArtifact: execution.billingArtifact ?? null
+          }
   };
 }
 
@@ -117,6 +153,19 @@ function evidenceList(value: unknown) {
 
 export function getDraftWorkflowStatus(draft: DraftForReview): WorkflowState {
   const metadata = getWorkflowMetadata(draft.rawPayload);
+  const execution = metadata.execution;
+
+  if (execution?.status === "success") {
+    return "completed";
+  }
+
+  if (execution?.status === "error") {
+    return "integration_error";
+  }
+
+  if (execution?.status === "running") {
+    return "sent_to_integration";
+  }
 
   if (metadata.reviewState) {
     return metadata.reviewState;
@@ -135,6 +184,30 @@ export function getDraftWorkflowStatus(draft: DraftForReview): WorkflowState {
   }
 
   return "pending_review";
+}
+
+export function getDraftExecutionSummary(draft: DraftForReview) {
+  const execution = getWorkflowMetadata(draft.rawPayload).execution;
+
+  if (!execution) {
+    return null;
+  }
+
+  return {
+    provider: execution.provider ?? "OMIE",
+    environment: execution.environment ?? "HOMOLOG",
+    status: execution.status ?? "idle",
+    queuedAt: execution.queuedAt ?? null,
+    startedAt: execution.startedAt ?? null,
+    finishedAt: execution.finishedAt ?? null,
+    retryCount: execution.retryCount ?? 0,
+    lastError: execution.lastError ?? null,
+    externalPartyId: execution.externalPartyId ?? null,
+    externalEntryId: execution.externalEntryId ?? null,
+    requestPayload: execution.requestPayload ?? null,
+    responsePayload: execution.responsePayload ?? null,
+    billingArtifact: execution.billingArtifact ?? null
+  };
 }
 
 export function getDraftApprovalBlockers(draft: DraftForReview): WorkflowBlocker[] {
@@ -407,66 +480,12 @@ export async function patchDraftFields(input: {
   return updated;
 }
 
-async function upsertSupplier(companyId: string, name: string, cnpj: string | null, category: string | null) {
-  const existing = await prisma.supplier.findFirst({
-    where: {
-      companyId,
-      OR: cnpj ? [{ cnpj }, { name }] : [{ name }]
-    }
-  });
-
-  if (existing) {
-    return prisma.supplier.update({
-      where: { id: existing.id },
-      data: {
-        cnpj: cnpj ?? existing.cnpj,
-        category: category ?? existing.category,
-        lastTransaction: "agora"
-      }
-    });
-  }
-
-  return prisma.supplier.create({
-    data: {
-      companyId,
-      name,
-      cnpj,
-      category: category ?? "A classificar",
-      yearlySpend: 0,
-      lastTransaction: "agora"
-    }
-  });
-}
-
-async function upsertClient(companyId: string, name: string) {
-  const existing = await prisma.client.findFirst({
-    where: {
-      companyId,
-      name
-    }
-  });
-
-  if (existing) {
-    return existing;
-  }
-
-  return prisma.client.create({
-    data: {
-      companyId,
-      name,
-      segment: "Automacao Financeira",
-      annualRevenue: 0,
-      status: "Ativo",
-      sinceYear: new Date().getUTCFullYear()
-    }
-  });
-}
-
 export async function approveDraft(input: {
   draftId: string;
   companyId: string;
   user: Pick<User, "id" | "name" | "email">;
   note?: string | null;
+  environment?: "HOMOLOG" | "PRODUCTION";
 }) {
   const draft = await prisma.financialDraft.findFirstOrThrow({
     where: { id: input.draftId, companyId: input.companyId },
@@ -486,53 +505,31 @@ export async function approveDraft(input: {
     throw new Error(message);
   }
 
-  let resultingResourceType: string;
-  let resultingResourceId: string;
-
-  if (draft.direction === "CONTA_PAGAR") {
-    const supplier = await upsertSupplier(input.companyId, draft.partyName, draft.cpfCnpj ?? null, draft.finalCategory);
-    const payable = await prisma.accountPayable.create({
-      data: {
-        companyId: input.companyId,
-        supplierId: supplier.id,
-        amount: draft.amount ?? 0,
-        dueDate: draft.dueDate ?? new Date(),
-        category: draft.finalCategory ?? draft.suggestedCategory ?? "A classificar",
-        status: "EM_REVISAO",
-        confidence: draft.confidenceScore / 100,
-        source: "AI Gateway",
-        assignee: input.user.name
-      }
-    });
-    resultingResourceType = "account-payable";
-    resultingResourceId = payable.id;
-  } else {
-    const client = await upsertClient(input.companyId, draft.partyName);
-    const receivable = await prisma.accountReceivable.create({
-      data: {
-        companyId: input.companyId,
-        clientId: client.id,
-        amount: draft.amount ?? 0,
-        dueDate: draft.dueDate ?? new Date(),
-        status: "EM_REVISAO",
-        source: "AI Gateway",
-        channel: draft.paymentMethod ?? "A classificar"
-      }
-    });
-    resultingResourceType = "account-receivable";
-    resultingResourceId = receivable.id;
-  }
-
   const updated = await prisma.financialDraft.update({
     where: { id: draft.id },
     data: {
       status: DraftStatus.APROVADO,
       reviewedAt: new Date(),
       rejectionReason: null,
-      resultingResourceType,
-      resultingResourceId,
+      resultingResourceType: null,
+      resultingResourceId: null,
       rawPayload: mergeWorkflowMetadata(draft.rawPayload, {
-        reviewState: "approved"
+        reviewState: "approved",
+        execution: {
+          provider: "OMIE",
+          environment: input.environment ?? "HOMOLOG",
+          status: "queued",
+          queuedAt: new Date().toISOString(),
+          startedAt: null,
+          finishedAt: null,
+          retryCount: 0,
+          lastError: null,
+          externalPartyId: null,
+          externalEntryId: null,
+          requestPayload: null,
+          responsePayload: null,
+          billingArtifact: null
+        }
       })
     }
   });
@@ -561,8 +558,9 @@ export async function approveDraft(input: {
     resource: "financial-draft",
     details: {
       draftId: draft.id,
-      resultingResourceType,
-      resultingResourceId,
+      executionProvider: "OMIE",
+      executionEnvironment: input.environment ?? "HOMOLOG",
+      executionStatus: "queued",
       note: input.note ?? null
     }
   });

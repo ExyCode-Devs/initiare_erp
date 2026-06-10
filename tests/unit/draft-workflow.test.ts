@@ -44,7 +44,7 @@ describe("draft-workflow", () => {
     vi.clearAllMocks();
   });
 
-  it("approves payable draft and creates account payable", async () => {
+  it("approves payable draft and queues execution without local mirror creation", async () => {
     prismaMock.financialDraft.findFirstOrThrow.mockResolvedValue({
       id: "draft-1",
       companyId: "company-1",
@@ -65,9 +65,6 @@ describe("draft-workflow", () => {
       confidenceScore: 88,
       sourceEmailId: "email-1",
     });
-    prismaMock.supplier.findFirst.mockResolvedValue(null);
-    prismaMock.supplier.create.mockResolvedValue({ id: "supplier-1" });
-    prismaMock.accountPayable.create.mockResolvedValue({ id: "payable-1" });
     prismaMock.financialDraft.update.mockResolvedValue({ id: "draft-1", status: "APROVADO" });
     prismaMock.inboundEmail.update.mockResolvedValue({ id: "email-1" });
     prismaMock.financialDraftReview.create.mockResolvedValue({ id: "review-1" });
@@ -86,9 +83,17 @@ describe("draft-workflow", () => {
     });
 
     expect(result).toEqual({ id: "draft-1", status: "APROVADO" });
-    expect(prismaMock.accountPayable.create).toHaveBeenCalledOnce();
+    expect(prismaMock.accountPayable.create).not.toHaveBeenCalled();
     expect(prismaMock.inboundEmail.update).toHaveBeenCalledOnce();
     expect(writeAuditLogMock).toHaveBeenCalledOnce();
+    expect(prismaMock.financialDraft.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          resultingResourceId: null,
+          resultingResourceType: null
+        })
+      })
+    );
   });
 
   it("blocks approval when required review fields are missing", async () => {

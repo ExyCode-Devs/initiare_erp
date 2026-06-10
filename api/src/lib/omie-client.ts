@@ -224,6 +224,10 @@ export class OmieClient {
     }
   }
 
+  async createParty(payload: Record<string, unknown>, context: OmieRequestContext) {
+    return this.request<OmieApiEnvelope>("geral/clientes", "IncluirCliente", payload, context);
+  }
+
   async createPayable(payload: Record<string, unknown>, context: OmieRequestContext) {
     return this.request<OmieApiEnvelope>("financas/contapagar", "IncluirContaPagar", payload, context);
   }

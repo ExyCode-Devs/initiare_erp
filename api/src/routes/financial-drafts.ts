@@ -10,6 +10,7 @@ import {
 import {
   approveDraft,
   getDraftApprovalBlockers,
+  getDraftExecutionSummary,
   getDraftWorkflowStatus,
   listDraftDuplicateCandidates,
   markDraftAsDuplicate,
@@ -19,7 +20,7 @@ import {
   undoDraftDuplicate
 } from "../lib/draft-workflow.js";
 import { getLegalEntityOrThrow } from "../lib/legal-entities.js";
-import { exportDraftToOmie } from "../lib/omie-export-service.js";
+import { exportDraftToOmie, retryDraftExecution, runApprovedDraftExecution } from "../lib/omie-export-service.js";
 import { prisma } from "../lib/prisma.js";
 
 function mapLegacySource(item: {
@@ -55,6 +56,7 @@ function buildReviewSnapshot(item: Parameters<typeof getDraftApprovalBlockers>[0
 
   return {
     workflowStatus: getDraftWorkflowStatus(item),
+    execution: getDraftExecutionSummary(item),
     blockers,
     canApprove: blockers.length === 0
   };
@@ -412,13 +414,43 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
           name: request.user.name,
           email: request.user.email
         },
-        note: payload.note ?? null
+        note: payload.note ?? null,
+        environment: ErpEnvironment.HOMOLOG
+      });
+      const execution = await runApprovedDraftExecution({
+        companyId: request.user.companyId,
+        draftId: params.id,
+        environment: ErpEnvironment.HOMOLOG,
+        triggeredByUserId: request.user.sub
       });
 
       return {
         id: approvedDraft.id,
-        status: approvedDraft.status
+        status: approvedDraft.status,
+        execution
       };
+    }
+  );
+
+  app.post(
+    "/financial-drafts/:id/retry-execution",
+    {
+      preHandler: app.authorize(["ADMIN", "ANALYST"])
+    },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const payload = z
+        .object({
+          environment: z.nativeEnum(ErpEnvironment).default(ErpEnvironment.HOMOLOG)
+        })
+        .parse(request.body ?? {});
+
+      return retryDraftExecution({
+        companyId: request.user.companyId,
+        draftId: params.id,
+        environment: payload.environment,
+        triggeredByUserId: request.user.sub
+      });
     }
   );
 

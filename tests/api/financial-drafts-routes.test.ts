@@ -26,6 +26,8 @@ const requestDraftReprocessMock = vi.fn();
 const undoDraftDuplicateMock = vi.fn();
 const getLegalEntityOrThrowMock = vi.fn();
 const exportDraftToOmieMock = vi.fn();
+const retryDraftExecutionMock = vi.fn();
+const runApprovedDraftExecutionMock = vi.fn();
 
 vi.mock("../../api/src/lib/prisma.js", () => ({
   prisma: prismaMock
@@ -49,7 +51,9 @@ vi.mock("../../api/src/lib/legal-entities.js", () => ({
 }));
 
 vi.mock("../../api/src/lib/omie-export-service.js", () => ({
-  exportDraftToOmie: exportDraftToOmieMock
+  exportDraftToOmie: exportDraftToOmieMock,
+  retryDraftExecution: retryDraftExecutionMock,
+  runApprovedDraftExecution: runApprovedDraftExecutionMock
 }));
 
 async function buildTestApp() {
@@ -106,6 +110,13 @@ describe("financial draft routes", () => {
     getDraftApprovalBlockersMock.mockReturnValue([]);
     getDraftWorkflowStatusMock.mockReturnValue("pending_review");
     listDraftDuplicateCandidatesMock.mockResolvedValue([]);
+    runApprovedDraftExecutionMock.mockResolvedValue({
+      draftId: "draft-1",
+      status: "success",
+      provider: "OMIE",
+      environment: "HOMOLOG",
+      externalId: "omie-1"
+    });
     app = await buildTestApp();
   });
 
@@ -206,6 +217,37 @@ describe("financial draft routes", () => {
     expect(approveDraftMock).not.toHaveBeenCalled();
   });
 
+  it("approves and sends draft to execution flow", async () => {
+    prismaMock.financialDraft.findFirstOrThrow.mockResolvedValue({
+      id: "draft-1",
+      companyId: "company-1"
+    });
+    approveDraftMock.mockResolvedValue({
+      id: "draft-1",
+      status: "APROVADO"
+    });
+    const token = await loginAs(app, { role: "ANALYST", companyId: "company-1" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/financial-drafts/draft-1/approve",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {}
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(approveDraftMock).toHaveBeenCalledWith(expect.objectContaining({ environment: "HOMOLOG" }));
+    expect(runApprovedDraftExecutionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draftId: "draft-1",
+        companyId: "company-1",
+        environment: "HOMOLOG"
+      })
+    );
+  });
+
   it("marks duplicate through explicit review action", async () => {
     markDraftAsDuplicateMock.mockResolvedValue({
       id: "draft-1",
@@ -259,6 +301,35 @@ describe("financial draft routes", () => {
         draftId: "draft-1",
         companyId: "company-1",
         note: "Low confidence"
+      })
+    );
+  });
+
+  it("retries execution only through explicit review action", async () => {
+    retryDraftExecutionMock.mockResolvedValue({
+      draftId: "draft-1",
+      status: "success",
+      provider: "OMIE",
+      environment: "HOMOLOG",
+      externalId: "omie-2"
+    });
+    const token = await loginAs(app, { role: "ADMIN", companyId: "company-1" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/financial-drafts/draft-1/retry-execution",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {}
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(retryDraftExecutionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draftId: "draft-1",
+        companyId: "company-1",
+        environment: "HOMOLOG"
       })
     );
   });

@@ -63,3 +63,18 @@ export function mapOmieDraftPayload(input: {
 
   return basePayload;
 }
+
+export function mapOmiePartyPayload(input: {
+  integrationCode: string;
+  name: string;
+  cpfCnpj: string | null;
+  email?: string | null;
+}) {
+  return {
+    codigo_cliente_integracao: input.integrationCode,
+    razao_social: input.name,
+    nome_fantasia: input.name,
+    cnpj_cpf: input.cpfCnpj ?? undefined,
+    email: input.email ?? undefined
+  };
+}
