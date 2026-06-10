@@ -84,16 +84,26 @@ async function buildTestApp() {
 }
 
 async function login(app: FastifyInstance) {
+  return loginAs(app, { role: "ADMIN", companyId: "company-1" });
+}
+
+async function loginAs(
+  app: FastifyInstance,
+  options: {
+    role: "ADMIN" | "ANALYST" | "VIEWER";
+    companyId: string;
+  }
+) {
   const { hashPassword } = await import("../../api/src/lib/auth.ts");
   prismaMock.user.findUnique.mockResolvedValue({
     id: "user-1",
     name: "Admin User",
     email: "admin@example.com",
     passwordHash: await hashPassword("ChangeMe123!"),
-    role: "ADMIN",
-    companyId: "company-1",
+    role: options.role,
+    companyId: options.companyId,
     company: {
-      id: "company-1",
+      id: options.companyId,
       name: "Initiare",
       domain: "localhost"
     }
@@ -152,6 +162,7 @@ describe("asaas routes", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().provider).toBe("ASAAS");
+    expect(listAsaasConnectionsMock).toHaveBeenCalledWith("company-1");
   });
 
   it("tests connection", async () => {
@@ -179,6 +190,7 @@ describe("asaas routes", () => {
 
     expect(response.statusCode).toBe(200);
     expect(markAsaasConnectionHealthMock).toHaveBeenCalled();
+    expect(resolveAsaasConnectionMock).toHaveBeenCalledWith("company-1", "legal-1", "SANDBOX");
   });
 
   it("accepts valid webhook", async () => {
@@ -207,5 +219,71 @@ describe("asaas routes", () => {
 
     expect(response.statusCode).toBe(200);
     expect(processAsaasWebhookMock).toHaveBeenCalled();
+  });
+
+  it("does not expose ASAAS secrets when saving settings", async () => {
+    saveAsaasConnectionMock.mockResolvedValue({
+      id: "conn-1",
+      environment: "SANDBOX",
+      baseUrl: "https://api-sandbox.asaas.com/v3",
+      enabled: true,
+      appKeyCipher: "encrypted-api-key",
+      webhookAuthTokenCipher: "encrypted-webhook-token"
+    });
+    const token = await login(app);
+
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/settings/integrations/asaas/SANDBOX",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {
+        legalEntityId: "legal-1",
+        apiKey: "$aact_sandbox_secret",
+        webhookAuthToken: "whsec_plain_secret",
+        baseUrl: "https://api-sandbox.asaas.com/v3",
+        enabled: true
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(saveAsaasConnectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: "company-1",
+        legalEntityId: "legal-1",
+        environment: "SANDBOX"
+      })
+    );
+    expect(response.json()).toEqual({
+      id: "conn-1",
+      environment: "SANDBOX",
+      baseUrl: "https://api-sandbox.asaas.com/v3",
+      enabled: true,
+      hasApiKey: true,
+      hasWebhookToken: true
+    });
+    expect(response.body).not.toContain("$aact_sandbox_secret");
+    expect(response.body).not.toContain("whsec_plain_secret");
+    expect(response.body).not.toContain("encrypted-api-key");
+    expect(response.body).not.toContain("encrypted-webhook-token");
+  });
+
+  it("blocks non-admin ASAAS mutations", async () => {
+    const token = await loginAs(app, { role: "ANALYST", companyId: "company-1" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/settings/integrations/asaas/SANDBOX/test",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {
+        legalEntityId: "legal-1"
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(resolveAsaasConnectionMock).not.toHaveBeenCalled();
   });
 });

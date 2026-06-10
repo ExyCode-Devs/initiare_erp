@@ -59,16 +59,26 @@ async function buildTestApp() {
 }
 
 async function login(app: FastifyInstance) {
+  return loginAs(app, { role: "ADMIN", companyId: "company-1" });
+}
+
+async function loginAs(
+  app: FastifyInstance,
+  options: {
+    role: "ADMIN" | "ANALYST" | "VIEWER";
+    companyId: string;
+  }
+) {
   const { hashPassword } = await import("../../api/src/lib/auth.ts");
   prismaMock.user.findUnique.mockResolvedValue({
     id: "user-1",
     name: "Admin User",
     email: "admin@example.com",
     passwordHash: await hashPassword("ChangeMe123!"),
-    role: "ADMIN",
-    companyId: "company-1",
+    role: options.role,
+    companyId: options.companyId,
     company: {
-      id: "company-1",
+      id: options.companyId,
       name: "Initiare",
       domain: "localhost"
     }
@@ -127,6 +137,7 @@ describe("omie routes", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().provider).toBe("OMIE");
+    expect(listOmieConnectionsMock).toHaveBeenCalledWith("company-1");
   });
 
   it("tests connection and syncs categories", async () => {
@@ -155,6 +166,7 @@ describe("omie routes", () => {
 
     expect(response.statusCode).toBe(200);
     expect(markOmieConnectionHealthMock).toHaveBeenCalled();
+    expect(resolveOmieConnectionMock).toHaveBeenCalledWith("company-1", "legal-1", "HOMOLOG");
   });
 
   it("exports draft and returns OMIE history", async () => {
@@ -215,5 +227,79 @@ describe("omie routes", () => {
     expect(exportResponse.statusCode).toBe(200);
     expect(historyResponse.statusCode).toBe(200);
     expect(historyResponse.json().syncs).toHaveLength(1);
+    expect(prismaMock.financialDraft.findFirstOrThrow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: "draft-1",
+          companyId: "company-1"
+        })
+      })
+    );
+  });
+
+  it("does not expose OMIE secrets when saving settings", async () => {
+    saveOmieConnectionMock.mockResolvedValue({
+      id: "conn-1",
+      environment: "HOMOLOG",
+      baseUrl: "https://app.omie.com.br/api/v1",
+      enabled: true,
+      appKeyCipher: "encrypted-key",
+      appSecretCipher: "encrypted-secret"
+    });
+    const token = await login(app);
+
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/settings/integrations/omie/HOMOLOG",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {
+        legalEntityId: "legal-1",
+        appKey: "plain-app-key",
+        appSecret: "plain-app-secret",
+        baseUrl: "https://app.omie.com.br/api/v1",
+        enabled: true
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(saveOmieConnectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: "company-1",
+        legalEntityId: "legal-1",
+        environment: "HOMOLOG"
+      })
+    );
+    expect(response.json()).toEqual({
+      id: "conn-1",
+      environment: "HOMOLOG",
+      baseUrl: "https://app.omie.com.br/api/v1",
+      enabled: true,
+      hasAppKey: true,
+      hasAppSecret: true
+    });
+    expect(response.body).not.toContain("plain-app-key");
+    expect(response.body).not.toContain("plain-app-secret");
+    expect(response.body).not.toContain("encrypted-key");
+    expect(response.body).not.toContain("encrypted-secret");
+  });
+
+  it("blocks non-admin OMIE mutations", async () => {
+    const token = await loginAs(app, { role: "ANALYST", companyId: "company-1" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/settings/integrations/omie/HOMOLOG/test",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {
+        legalEntityId: "legal-1"
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(resolveOmieConnectionMock).not.toHaveBeenCalled();
   });
 });
