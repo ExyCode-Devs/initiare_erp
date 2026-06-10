@@ -10,6 +10,7 @@ import { prisma } from "./lib/prisma.js";
 import authRoutes from "./routes/auth.js";
 import aiEventRoutes from "./routes/ai-events.js";
 import automationRoutes from "./routes/automation.js";
+import advancedOpsRoutes from "./routes/advanced-ops.js";
 import asaasRoutes from "./routes/asaas.js";
 import changelogRoutes from "./routes/changelog.js";
 import dashboardRoutes from "./routes/dashboard.js";
@@ -134,6 +135,7 @@ export function buildApp() {
   app.register(omieRoutes, { prefix: "/api" });
   app.register(asaasRoutes, { prefix: "/api" });
   app.register(automationRoutes, { prefix: "/api" });
+  app.register(advancedOpsRoutes, { prefix: "/api" });
   app.register(changelogRoutes, { prefix: "/api" });
   app.register(monitoringRoutes, { prefix: "/api/monitoring" });
 

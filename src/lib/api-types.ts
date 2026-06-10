@@ -502,3 +502,49 @@ export interface ChangelogAdminResponse {
     companyId: string;
   }>;
 }
+
+export interface AdvancedOpsOverviewResponse {
+  summary: {
+    dueContracts: number;
+    dueServiceOrders: number;
+    reconciliationCount: number;
+    approvedDrafts: number;
+    receivableVolume: number;
+  };
+  businessClients: Array<{
+    id: string;
+    name: string;
+  }>;
+  legalEntities: Array<{
+    id: string;
+    legalName: string;
+    tradeName: string | null;
+    isDefault: boolean;
+  }>;
+  latestDrafts: Array<{
+    id: string;
+    partyName: string;
+    status: string;
+    sourceLabel: string;
+    createdAt: string;
+  }>;
+}
+
+export interface PortalOverviewResponse {
+  client: {
+    id: string;
+    name: string;
+  };
+  stats: {
+    totalReceivables: number;
+    totalVolume: number;
+  };
+  items: Array<{
+    id: string;
+    amount: number;
+    dueDate: string;
+    status: string;
+    source: string;
+    channel: string;
+  }>;
+}
