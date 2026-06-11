@@ -1227,7 +1227,7 @@ function Page() {
                 <Stat label="Nao lidas" value={String(unreadNotifications.length)} accent="warning" icon={<Bell className="size-4" />} />
                 <Stat label="Publicadas" value={String(notificationsQuery.data?.items.length ?? 0)} accent="info" icon={<Bell className="size-4" />} />
                 <Stat label="Mailboxes ativos" value={String(mailboxesQuery.data?.items.filter((item) => item.active).length ?? 0)} accent="ai" icon={<Mail className="size-4" />} />
-                <Stat label="Canais email" value={String(mailboxesQuery.data?.items.length > 0 ? 1 : 0)} accent="success" icon={<Mail className="size-4" />} />
+                <Stat label="Canais email" value={String((mailboxesQuery.data?.items.length ?? 0) > 0 ? 1 : 0)} accent="success" icon={<Mail className="size-4" />} />
               </div>
 
               <Card className="p-5">
@@ -1324,7 +1324,7 @@ function Page() {
                         </label>
                         <label className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2">
                           <span>Resumo por email</span>
-                          <input type="checkbox" checked={mailboxesQuery.data?.items.length > 0} readOnly />
+                          <input type="checkbox" checked={(mailboxesQuery.data?.items.length ?? 0) > 0} readOnly />
                         </label>
                       </div>
                     </div>
