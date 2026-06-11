@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/api";
+import type { ChangelogPublicResponse } from "@/lib/api-types";
 import { navItems } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +25,13 @@ export function Sidebar() {
     queryFn: () => apiRequest<{ hero: { openExceptions: number } }>("/dashboard/overview"),
     staleTime: 60_000
   });
+  const notificationsQuery = useQuery({
+    queryKey: ["public-changelog"],
+    queryFn: () => apiRequest<ChangelogPublicResponse>("/changelog"),
+    staleTime: 60_000,
+  });
+  const unreadNotifications =
+    notificationsQuery.data?.items.filter((item) => item.unread).length ?? 0;
 
   return (
     <aside
@@ -92,7 +100,12 @@ export function Sidebar() {
             <div className="space-y-0.5">
               {group.items.map((item) => {
                 const active = pathname === item.to;
-                const badge = item.to === "/excecoes" ? data?.hero.openExceptions : undefined;
+                const badge =
+                  item.to === "/excecoes"
+                    ? data?.hero.openExceptions
+                    : item.to === "/novidades"
+                      ? unreadNotifications
+                      : undefined;
 
                 return (
                   <Link
@@ -115,7 +128,14 @@ export function Sidebar() {
                     <NavIcon name={item.icon} className="size-4 shrink-0" />
                     {!collapsed ? <span className="truncate flex-1">{item.label}</span> : null}
                     {!collapsed && badge ? (
-                      <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded bg-warning/15 text-warning border border-warning/20">
+                      <span
+                        data-testid={
+                          item.to === "/novidades"
+                            ? "sidebar-notifications-badge"
+                            : undefined
+                        }
+                        className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded bg-warning/15 text-warning border border-warning/20"
+                      >
                         {badge}
                       </span>
                     ) : null}

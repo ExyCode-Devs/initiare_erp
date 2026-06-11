@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { provisionDemoData } from "./demo-seed.js";
 import { provisionLocalBaseline, resetLocalData } from "./local-baseline.js";
 
 const prisma = new PrismaClient();
@@ -17,6 +18,7 @@ async function main() {
   }
 
   await provisionLocalBaseline(prisma);
+  await provisionDemoData(prisma);
   console.log("Seed complete for local baseline.");
 }
 

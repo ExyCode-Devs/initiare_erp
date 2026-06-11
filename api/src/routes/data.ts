@@ -1,6 +1,7 @@
 import type { ErpProvider, FinanceStatus, LogStatus, Severity } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { normalizeAutomationSettings } from "../lib/automation-settings.js";
 import { prisma } from "../lib/prisma.js";
 
 const financeStatusMap: Record<FinanceStatus, string> = {
@@ -37,6 +38,18 @@ const companySettingsSchema = z.object({
   replyFromName: z.string().trim().nullable().optional(),
   replyFromEmail: z.string().trim().email().nullable().optional(),
   replyToEmail: z.string().trim().email().nullable().optional()
+});
+
+const automationSettingsUpdateSchema = z.object({
+  emailIngestEnabled: z.boolean(),
+  batchProcessingEnabled: z.boolean(),
+  autoSyncMailboxes: z.boolean(),
+  autoTestIntegrations: z.boolean(),
+  draftAutoReprocess: z.boolean(),
+  notificationDigestEnabled: z.boolean(),
+  defaultEnvironment: z.enum(["HOMOLOG", "SANDBOX"]),
+  maxEmailsPerRun: z.coerce.number().int().min(1).max(100),
+  batchIntervalMinutes: z.coerce.number().int().min(1).max(1440)
 });
 
 function formatMoney(value: number) {
@@ -151,6 +164,7 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
         items: items.map((item) => ({
           id: item.id,
           name: item.name,
+          document: item.document,
           segment: item.segment,
           revenue: Number(item.annualRevenue),
           status: item.status,
@@ -473,6 +487,51 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
             replyFromEmail: company.replyFromEmail,
             replyToEmail: company.replyToEmail
           }
+        };
+      }
+    );
+
+    protectedApp.get("/settings/automation", async (request) => {
+      const company = await prisma.company.findUniqueOrThrow({
+        where: { id: request.user.companyId },
+        select: { automationSettings: true }
+      });
+
+      return {
+        settings: normalizeAutomationSettings(company.automationSettings)
+      };
+    });
+
+    protectedApp.patch(
+      "/settings/automation",
+      {
+        preHandler: protectedApp.authorize(["ADMIN"])
+      },
+      async (request) => {
+        const payload = automationSettingsUpdateSchema.parse(request.body);
+
+        const company = await prisma.company.update({
+          where: { id: request.user.companyId },
+          data: {
+            automationSettings: payload
+          },
+          select: {
+            automationSettings: true
+          }
+        });
+
+        await prisma.auditLog.create({
+          data: {
+            action: "automation.settings.update",
+            resource: "company",
+            companyId: request.user.companyId,
+            userId: request.user.sub,
+            details: payload
+          }
+        });
+
+        return {
+          settings: normalizeAutomationSettings(company.automationSettings)
         };
       }
     );

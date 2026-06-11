@@ -5,6 +5,7 @@ import { extractOmieLabel, normalizeOmieLookupLabel } from "./omie-mapper.js";
 import { prisma } from "./prisma.js";
 import { toNullablePrismaJson } from "./prisma-json.js";
 import type { OmieCatalogSyncResult } from "./omie-types.js";
+import { normalizeBrazilianDocument, reconcileCompanyClientDocuments, upsertClientIdentity } from "./client-identity.js";
 
 function extractExternalId(payload: Record<string, unknown>) {
   const candidates = [
@@ -22,6 +23,114 @@ function extractExternalId(payload: Record<string, unknown>) {
 function extractDocument(payload: Record<string, unknown>) {
   const value = payload.cnpj_cpf ?? payload.cnpj ?? payload.cpf;
   return value == null ? null : String(value);
+}
+
+function looksLikeSupplier(payload: Record<string, unknown>) {
+  const typeCandidate = payload.tipo_cliente_fornecedor ?? payload.tipo_pessoa ?? payload.inativo;
+  if (typeof typeCandidate === "string") {
+    const normalized = typeCandidate.trim().toUpperCase();
+    if (normalized.includes("FORNEC")) {
+      return true;
+    }
+    if (normalized.includes("CLIENT")) {
+      return false;
+    }
+  }
+
+  const supplierCode = payload.codigo_cliente_fornecedor;
+  const clientCode = payload.codigo_cliente_omie;
+  if (supplierCode != null && clientCode == null) {
+    return true;
+  }
+
+  return false;
+}
+
+async function ensureLocalClient(input: {
+  localClients: Array<{
+    id: string;
+    name: string;
+    document: string | null;
+  }>;
+  companyId: string;
+  payload: Record<string, unknown>;
+  name: string;
+}) {
+  const created = await upsertClientIdentity(prisma, {
+    companyId: input.companyId,
+    name: input.name,
+    document: extractDocument(input.payload),
+    segment: "OMIE sync",
+    status: "Ativo",
+    sinceYear: new Date().getUTCFullYear()
+  });
+
+  const tracked = input.localClients.find((item) => item.id === created.id);
+  if (tracked) {
+    tracked.name = created.name;
+    tracked.document = created.document;
+  } else {
+    input.localClients.push({
+      id: created.id,
+      name: created.name,
+      document: created.document
+    });
+  }
+  return created;
+}
+
+async function ensureLocalSupplier(input: {
+  localSuppliers: Array<{
+    id: string;
+    name: string;
+    cnpj: string | null;
+    category: string;
+  }>;
+  companyId: string;
+  payload: Record<string, unknown>;
+  name: string;
+}) {
+  const document = extractDocument(input.payload);
+  const normalizedName = normalizeOmieLookupLabel(input.name);
+  const normalizedDocument = normalizeOmieLookupLabel(document);
+
+  const existing = input.localSuppliers.find(
+    (item) =>
+      normalizeOmieLookupLabel(item.name) === normalizedName ||
+      (normalizedDocument.length > 0 && normalizeOmieLookupLabel(item.cnpj) === normalizedDocument)
+  );
+
+  if (existing) {
+    const nextCategory = existing.category?.trim().length ? existing.category : "OMIE sync";
+    if (existing.name !== input.name || existing.cnpj !== (document ?? null) || existing.category !== nextCategory) {
+      const updated = await prisma.supplier.update({
+        where: { id: existing.id },
+        data: {
+          name: input.name,
+          cnpj: document ?? null,
+          category: nextCategory
+        }
+      });
+      existing.name = updated.name;
+      existing.cnpj = updated.cnpj;
+      existing.category = updated.category;
+      return updated;
+    }
+    return existing;
+  }
+
+  const created = await prisma.supplier.create({
+    data: {
+      companyId: input.companyId,
+      name: input.name,
+      cnpj: document ?? null,
+      category: "OMIE sync",
+      yearlySpend: 0,
+      lastTransaction: "sincronizado"
+    }
+  });
+  input.localSuppliers.push(created);
+  return created;
 }
 
 async function upsertSyncRecord(input: {
@@ -84,8 +193,8 @@ export async function syncOmieCatalogs(input: {
 
   const [localClients, localSuppliers, localCategories, omieClients, omieCategories, omieCurrentAccounts] =
     await Promise.all([
-      prisma.client.findMany({ where: { companyId: input.companyId } }),
-      prisma.supplier.findMany({ where: { companyId: input.companyId } }),
+      prisma.client.findMany({ where: { companyId: input.companyId }, select: { id: true, name: true, document: true } }),
+      prisma.supplier.findMany({ where: { companyId: input.companyId }, select: { id: true, name: true, cnpj: true, category: true } }),
       prisma.expenseCategory.findMany({ where: { companyId: input.companyId } }),
       client.listClients(context),
       client.listCategories(context),
@@ -105,11 +214,15 @@ export async function syncOmieCatalogs(input: {
       continue;
     }
 
-    const normalizedLabel = normalizeOmieLookupLabel(label);
-    const document = normalizeOmieLookupLabel(extractDocument(record));
+    const supplierOnly = looksLikeSupplier(record);
 
-    const localClient = localClients.find((item) => normalizeOmieLookupLabel(item.name) === normalizedLabel);
-    if (localClient) {
+    if (!supplierOnly) {
+      const localClient = await ensureLocalClient({
+        localClients,
+        companyId: input.companyId,
+        payload: record,
+        name: label
+      });
       await upsertSyncRecord({
         companyId: input.companyId,
         connectionId: connection.id,
@@ -122,12 +235,16 @@ export async function syncOmieCatalogs(input: {
       clientCount += 1;
     }
 
-    const localSupplier = localSuppliers.find(
-      (item) =>
-        normalizeOmieLookupLabel(item.name) === normalizedLabel ||
-        (document.length > 0 && normalizeOmieLookupLabel(item.cnpj) === document)
-    );
-    if (localSupplier) {
+    const normalizedDocument = normalizeBrazilianDocument(extractDocument(record));
+    const shouldCreateSupplier =
+      supplierOnly || record.codigo_cliente_fornecedor != null || (record.codigo_cliente_integracao == null && Boolean(normalizedDocument));
+    if (shouldCreateSupplier) {
+      const localSupplier = await ensureLocalSupplier({
+        localSuppliers,
+        companyId: input.companyId,
+        payload: record,
+        name: label
+      });
       await upsertSyncRecord({
         companyId: input.companyId,
         connectionId: connection.id,
@@ -181,6 +298,7 @@ export async function syncOmieCatalogs(input: {
     currentAccountCount += 1;
   }
 
+  await reconcileCompanyClientDocuments(prisma, input.companyId);
   await touchOmieLastSync(connection.id);
 
   return {

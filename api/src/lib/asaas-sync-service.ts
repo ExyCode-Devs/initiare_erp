@@ -5,32 +5,20 @@ import { prisma } from "./prisma.js";
 import { toNullablePrismaJson } from "./prisma-json.js";
 import { resolveAsaasConnection, touchAsaasLastSync } from "./asaas-connections.js";
 import type { AsaasNormalizedCustomer, AsaasNormalizedPayment, AsaasSyncResult } from "./asaas-types.js";
+import { reconcileCompanyClientDocuments, upsertClientIdentity } from "./client-identity.js";
 
 function currentYear() {
   return new Date().getFullYear();
 }
 
 async function upsertClientFromAsaas(companyId: string, customer: AsaasNormalizedCustomer) {
-  const existing = await prisma.client.findFirst({
-    where: {
-      companyId,
-      name: customer.name
-    }
-  });
-
-  if (existing) {
-    return existing;
-  }
-
-  return prisma.client.create({
-    data: {
-      companyId,
-      name: customer.name,
-      segment: "Asaas",
-      annualRevenue: 0,
-      status: "Sincronizado",
-      sinceYear: currentYear()
-    }
+  return upsertClientIdentity(prisma, {
+    companyId,
+    name: customer.name,
+    document: customer.cpfCnpj,
+    segment: "Asaas",
+    status: "Sincronizado",
+    sinceYear: currentYear()
   });
 }
 
@@ -182,6 +170,7 @@ export async function syncAsaasData(input: {
     }
   }
 
+  await reconcileCompanyClientDocuments(prisma, input.companyId);
   await touchAsaasLastSync(connection.id);
 
   return {

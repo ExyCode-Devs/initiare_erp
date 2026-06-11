@@ -20,6 +20,7 @@ dist-ssr
 .env.production
 .env.production.local
 *.local
+test-results/
 
 # Wrangler / Cloudflare
 .wrangler/

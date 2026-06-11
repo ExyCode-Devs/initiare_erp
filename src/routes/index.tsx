@@ -104,6 +104,7 @@ function Dashboard() {
   const data = dashboardQuery.data;
   const isLoading = dashboardQuery.isLoading || automationQuery.isLoading;
   const isError = dashboardQuery.isError || automationQuery.isError;
+  const runtime = automationQuery.data?.runtime ?? null;
 
   if (isLoading) {
     return (
@@ -341,6 +342,54 @@ function Dashboard() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border bg-background/60 p-4">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
+                    Runtime automatico
+                  </div>
+                  <div className="grid grid-cols-2 gap-2" data-testid="dashboard-automation-runtime">
+                    <div className="rounded-lg border border-border bg-card px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Ingestao
+                      </div>
+                      <div className="mt-1 text-[12px] font-medium">
+                        {runtime?.emailIngestEnabled ? "Ligada" : "Desligada"}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border bg-card px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Auto sync
+                      </div>
+                      <div className="mt-1 text-[12px] font-medium">
+                        {runtime?.autoSyncMailboxes ? "Ligado" : "Desligado"}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border bg-card px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Modo
+                      </div>
+                      <div className="mt-1 text-[12px] font-medium">
+                        {runtime?.batchProcessingEnabled ? `Lote ${runtime.maxEmailsPerRun}` : "1 por ciclo"}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border bg-card px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Mailboxes
+                      </div>
+                      <div className="mt-1 text-[12px] font-medium">
+                        {runtime ? `${runtime.activeMailboxes}/${runtime.totalMailboxes} ativos` : "0/0 ativos"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-2 text-[11px] text-muted-foreground">
+                    {runtime
+                      ? `${runtime.defaultEnvironment} Â· ciclo ${runtime.batchIntervalMinutes} min Â· ${
+                          runtime.latestSuccessfulSyncAt
+                            ? `ultimo sync ${new Date(runtime.latestSuccessfulSyncAt).toLocaleString("pt-BR")}`
+                            : "sem sync automatico ainda"
+                        }`
+                      : "Sem runtime carregado"}
                   </div>
                 </div>
                 <div className="rounded-xl border border-border bg-background/60 p-4">

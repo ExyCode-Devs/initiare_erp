@@ -12,6 +12,7 @@ import { resolveOmieConnection, touchOmieLastSync } from "./omie-connections.js"
 import { extractOmieLabel, mapOmieDraftPayload, mapOmiePartyPayload, normalizeOmieLookupLabel } from "./omie-mapper.js";
 import { prisma } from "./prisma.js";
 import { toNullablePrismaJson, toPrismaJson } from "./prisma-json.js";
+import { normalizeBrazilianDocument, upsertClientIdentity } from "./client-identity.js";
 
 type ExecutionStatus = "idle" | "queued" | "running" | "success" | "error";
 
@@ -176,7 +177,9 @@ async function ensureLocalSupplier(input: {
   const existing = await prisma.supplier.findFirst({
     where: {
       companyId: input.companyId,
-      OR: input.cpfCnpj ? [{ cnpj: input.cpfCnpj }, { name: input.name }] : [{ name: input.name }]
+      OR: input.cpfCnpj
+        ? [{ cnpj: normalizeBrazilianDocument(input.cpfCnpj) }, { name: input.name }]
+        : [{ name: input.name }]
     }
   });
 
@@ -188,7 +191,7 @@ async function ensureLocalSupplier(input: {
     data: {
       companyId: input.companyId,
       name: input.name,
-      cnpj: input.cpfCnpj,
+      cnpj: normalizeBrazilianDocument(input.cpfCnpj),
       category: input.category ?? "A classificar",
       yearlySpend: 0,
       lastTransaction: "agora"
@@ -199,27 +202,15 @@ async function ensureLocalSupplier(input: {
 async function ensureLocalClient(input: {
   companyId: string;
   name: string;
+  cpfCnpj: string | null;
 }) {
-  const existing = await prisma.client.findFirst({
-    where: {
-      companyId: input.companyId,
-      name: input.name
-    }
-  });
-
-  if (existing) {
-    return existing;
-  }
-
-  return prisma.client.create({
-    data: {
-      companyId: input.companyId,
-      name: input.name,
-      segment: "Automacao Financeira",
-      annualRevenue: 0,
-      status: "Ativo",
-      sinceYear: new Date().getUTCFullYear()
-    }
+  return upsertClientIdentity(prisma, {
+    companyId: input.companyId,
+    name: input.name,
+    document: input.cpfCnpj,
+    segment: "Automacao Financeira",
+    status: "Ativo",
+    sinceYear: new Date().getUTCFullYear()
   });
 }
 
@@ -300,7 +291,8 @@ async function ensurePartyExternalId(input: {
 
   const clientRecord = await ensureLocalClient({
     companyId: input.companyId,
-    name: input.partyName
+    name: input.partyName,
+    cpfCnpj: input.cpfCnpj
   });
   const mapped = getFirstExternalId(
     input.syncRecords.filter((record) => record.entityType === ErpSyncEntityType.CLIENT && record.internalId === clientRecord.id)

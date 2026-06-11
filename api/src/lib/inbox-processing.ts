@@ -7,6 +7,7 @@ import { simpleParser } from "mailparser";
 import type { Attachment } from "mailparser";
 import { PDFParse } from "pdf-parse";
 import { env } from "../config/env.js";
+import { normalizeAutomationSettings } from "./automation-settings.js";
 import { prisma } from "./prisma.js";
 import { computeConfidence } from "./confidence.js";
 import { invokeN8nExtraction } from "./n8n-provider.js";
@@ -371,7 +372,11 @@ export async function testMailboxConnection(mailboxId: string, companyId: string
   }
 }
 
-export async function processMailboxAccount(mailboxId: string, companyId: string) {
+export async function processMailboxAccount(
+  mailboxId: string,
+  companyId: string,
+  options?: { mode?: "manual" | "auto"; limit?: number },
+) {
   const mailbox = await prisma.mailboxAccount.findFirstOrThrow({
     where: { id: mailboxId, companyId }
   });
@@ -409,7 +414,7 @@ export async function processMailboxAccount(mailboxId: string, companyId: string
     try {
       const since = mailbox.lastSyncAt ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const uids = await client.search({ since });
-      const selectedUids = (uids || []).slice(-env.WORKER_BATCH_SIZE);
+      const selectedUids = (uids || []).slice(-(options?.limit ?? env.WORKER_BATCH_SIZE));
 
       for (const uid of selectedUids) {
         const messageMeta = await client.fetchOne(uid, {
@@ -557,6 +562,17 @@ export async function processMailboxAccount(mailboxId: string, companyId: string
 }
 
 export async function processActiveMailboxes() {
+  const companies = await prisma.company.findMany({
+    select: {
+      id: true,
+      automationSettings: true
+    }
+  });
+
+  const automationByCompany = new Map(
+    companies.map((company) => [company.id, normalizeAutomationSettings(company.automationSettings)]),
+  );
+
   const mailboxes = await prisma.mailboxAccount.findMany({
     where: {
       active: true
@@ -568,8 +584,16 @@ export async function processActiveMailboxes() {
   });
 
   for (const mailbox of mailboxes) {
+    const settings = automationByCompany.get(mailbox.companyId);
+    if (!settings || !settings.emailIngestEnabled || !settings.autoSyncMailboxes) {
+      continue;
+    }
+
     try {
-      await processMailboxAccount(mailbox.id, mailbox.companyId);
+      await processMailboxAccount(mailbox.id, mailbox.companyId, {
+        mode: "auto",
+        limit: settings.batchProcessingEnabled ? settings.maxEmailsPerRun : 1,
+      });
     } catch (error) {
       console.error(`[worker] mailbox ${mailbox.id} failed`, error);
     }

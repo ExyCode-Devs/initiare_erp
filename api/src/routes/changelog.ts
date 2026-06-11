@@ -99,6 +99,51 @@ const changelogRoutes: FastifyPluginAsync = async (app) => {
     };
   });
 
+  app.post("/changelog/mark-all-seen", async (request) => {
+    const entries = await prisma.changelogEntry.findMany({
+      where: {
+        companyId: request.user.companyId,
+        status: "PUBLICADO",
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (entries.length === 0) {
+      return { ok: true, count: 0 };
+    }
+
+    const now = new Date();
+
+    await prisma.$transaction(
+      entries.map((entry) =>
+        prisma.changelogRead.upsert({
+          where: {
+            entryId_userId: {
+              entryId: entry.id,
+              userId: request.user.sub,
+            },
+          },
+          update: {
+            readAt: now,
+          },
+          create: {
+            companyId: request.user.companyId,
+            entryId: entry.id,
+            userId: request.user.sub,
+            readAt: now,
+          },
+        }),
+      ),
+    );
+
+    return {
+      ok: true,
+      count: entries.length,
+    };
+  });
+
   app.register(async (adminApp) => {
     adminApp.addHook("preHandler", adminApp.authorize(["ADMIN"]));
 

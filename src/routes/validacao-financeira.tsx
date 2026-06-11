@@ -85,6 +85,80 @@ function humanStatus(status: string) {
   return status;
 }
 
+function getApprovalGateSnapshot(detail: FinancialDraftDetailResponse) {
+  const execution = detail.review.execution;
+
+  if (execution?.status === "queued") {
+    return {
+      status: "Na fila local",
+      nextAction: "Aguardando worker ou execucao manual.",
+      externalState: "Nao concluido no ERP",
+    };
+  }
+
+  if (execution?.status === "running") {
+    return {
+      status: "Executando integracao",
+      nextAction: "Fluxo em andamento.",
+      externalState: "Processando no ERP",
+    };
+  }
+
+  if (execution?.status === "success") {
+    return {
+      status: "Concluido",
+      nextAction: "Registro sincronizado.",
+      externalState: "Criado no ERP",
+    };
+  }
+
+  if (execution?.status === "error") {
+    return {
+      status: "Erro de execucao",
+      nextAction: "Corrigir e reenviar execucao.",
+      externalState: "Falha no ERP",
+    };
+  }
+
+  if (detail.review.workflowStatus === "duplicated") {
+    return {
+      status: "Bloqueado por duplicidade",
+      nextAction: "Desfazer duplicado ou manter rejeitado.",
+      externalState: "Nao enviado",
+    };
+  }
+
+  if (detail.review.workflowStatus === "rejected") {
+    return {
+      status: "Rejeitado",
+      nextAction: "Sem envio externo.",
+      externalState: "Nao enviado",
+    };
+  }
+
+  if (detail.review.blockers.length > 0) {
+    return {
+      status: "Bloqueado",
+      nextAction: "Corrigir campos e remover blockers.",
+      externalState: "Nao enviado",
+    };
+  }
+
+  if (detail.review.canApprove) {
+    return {
+      status: "Pronto para aprovacao",
+      nextAction: "Pode aprovar quando revisar os dados.",
+      externalState: "Nao enviado",
+    };
+  }
+
+  return {
+    status: "Em revisao",
+    nextAction: "Analise humana pendente.",
+    externalState: "Nao enviado",
+  };
+}
+
 function getSourceTitle(detail: FinancialDraftDetailResponse) {
   return detail.source?.subject ?? detail.sourceEmail?.subject ?? detail.source?.channel ?? "AI event";
 }
@@ -341,6 +415,7 @@ function ValidacaoFinanceiraPage() {
   const runs = detail ? normalizeRuns(detail) : [];
   const latestOmieSync = detail?.omieHistory.syncs[0] ?? null;
   const execution = detail?.review.execution ?? null;
+  const approvalGate = detail ? getApprovalGateSnapshot(detail) : null;
 
   return (
     <div className="max-w-[1480px] mx-auto px-6 py-8 space-y-6">
@@ -456,6 +531,32 @@ function ValidacaoFinanceiraPage() {
                   <StatusBadge status={humanStatus(detail.review.workflowStatus)} />
                 </div>
               </div>
+
+              {approvalGate ? (
+                <div className="rounded-xl border border-border bg-background/60 p-4" data-testid="draft-approval-gate">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Approval gate</div>
+                      <div className="mt-1 text-[16px] font-semibold">{approvalGate.status}</div>
+                    </div>
+                    <StatusBadge status={approvalGate.status} />
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-[12px]">
+                    <div className="rounded-lg border border-border bg-card px-3 py-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Proximo passo</div>
+                      <div className="mt-1">{approvalGate.nextAction}</div>
+                    </div>
+                    <div className="rounded-lg border border-border bg-card px-3 py-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Estado externo</div>
+                      <div className="mt-1">{approvalGate.externalState}</div>
+                    </div>
+                    <div className="rounded-lg border border-border bg-card px-3 py-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Workflow</div>
+                      <div className="mt-1">{humanStatus(detail.review.workflowStatus)}</div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               {detail.review.blockers.length ? (
                 <div className="rounded-xl border border-warning/25 bg-warning/10 px-4 py-3">
@@ -680,7 +781,7 @@ function ValidacaoFinanceiraPage() {
                     <Save className="size-3.5" /> Salvar ajustes
                   </button>
                   <button onClick={() => approveMutation.mutate()} disabled={!canReview || approveMutation.isPending || !detail.review.canApprove} data-testid="draft-approve-button" className="h-9 px-3 rounded-md bg-foreground text-background text-[12.5px] font-medium inline-flex items-center gap-1.5 hover:opacity-90 disabled:opacity-60">
-                    <CheckCircle2 className="size-3.5" /> Aprovar e enviar
+                    <CheckCircle2 className="size-3.5" /> Aprovar e seguir fluxo
                   </button>
                   <button
                     onClick={() => reprocessMutation.mutate()}

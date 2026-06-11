@@ -29,6 +29,8 @@ export function extractOmieLabel(payload: unknown) {
   const candidates = [
     data.name,
     data.nome,
+    data.razao_social,
+    data.nome_fantasia,
     data.descricao,
     data.descricao_padrao,
     data.descricao_status,

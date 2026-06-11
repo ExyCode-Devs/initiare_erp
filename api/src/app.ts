@@ -79,7 +79,8 @@ export function buildApp() {
 
   app.register(cors, {
     origin: [env.APP_ORIGIN],
-    credentials: true
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
   });
 
   app.register(helmet, {

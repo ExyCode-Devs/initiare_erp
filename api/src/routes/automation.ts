@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { normalizeAutomationSettings } from "../lib/automation-settings.js";
 import { prisma } from "../lib/prisma.js";
 
 const automationRoutes: FastifyPluginAsync = async (app) => {
@@ -7,6 +8,8 @@ const automationRoutes: FastifyPluginAsync = async (app) => {
   app.get("/automation/summary", async (request) => {
     const companyId = request.user.companyId;
     const [
+      company,
+      mailboxes,
       emails,
       drafts,
       jobRuns,
@@ -18,6 +21,20 @@ const automationRoutes: FastifyPluginAsync = async (app) => {
       rejected,
       lowConfidence,
     ] = await Promise.all([
+      prisma.company.findUniqueOrThrow({
+        where: { id: companyId },
+        select: { automationSettings: true },
+      }),
+      prisma.mailboxAccount.findMany({
+        where: { companyId },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          active: true,
+          lastSyncAt: true,
+          lastError: true,
+        },
+      }),
       prisma.inboundEmail.findMany({
         where: { companyId },
         orderBy: { receivedAt: "desc" },
@@ -77,6 +94,12 @@ const automationRoutes: FastifyPluginAsync = async (app) => {
     const volume = drafts
       .filter((item) => item.status !== "REJEITADO")
       .reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+    const settings = normalizeAutomationSettings(company.automationSettings);
+    const activeMailboxes = mailboxes.filter((item) => item.active);
+    const latestSuccessfulSync = activeMailboxes
+      .map((item) => item.lastSyncAt)
+      .filter((value): value is Date => Boolean(value))
+      .sort((left, right) => right.getTime() - left.getTime())[0] ?? null;
 
     return {
       stats: {
@@ -88,6 +111,18 @@ const automationRoutes: FastifyPluginAsync = async (app) => {
         rejected,
         lowConfidence,
         volume,
+      },
+      runtime: {
+        emailIngestEnabled: settings.emailIngestEnabled,
+        batchProcessingEnabled: settings.batchProcessingEnabled,
+        autoSyncMailboxes: settings.autoSyncMailboxes,
+        defaultEnvironment: settings.defaultEnvironment,
+        maxEmailsPerRun: settings.maxEmailsPerRun,
+        batchIntervalMinutes: settings.batchIntervalMinutes,
+        totalMailboxes: mailboxes.length,
+        activeMailboxes: activeMailboxes.length,
+        unhealthyMailboxes: activeMailboxes.filter((item) => Boolean(item.lastError)).length,
+        latestSuccessfulSyncAt: latestSuccessfulSync?.toISOString() ?? null,
       },
       latestEmails: emails.map((item) => ({
         id: item.id,

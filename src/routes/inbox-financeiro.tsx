@@ -296,6 +296,52 @@ function InboxFinanceiroPage() {
         />
       </div>
 
+      <Card className="p-5">
+        <SectionHeader
+          title="Runtime automatico"
+          desc="Leitura rapida do modo local antes de qualquer sync manual."
+        />
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3" data-testid="inbox-automation-runtime">
+          <Stat
+            label="Ingestao"
+            value={summaryQuery.data.runtime.emailIngestEnabled ? "Ligada" : "Desligada"}
+            accent="ai"
+            icon={<Mail className="size-4" />}
+          />
+          <Stat
+            label="Auto sync"
+            value={summaryQuery.data.runtime.autoSyncMailboxes ? "Ligado" : "Desligado"}
+            accent="info"
+            icon={<RefreshCcw className="size-4" />}
+          />
+          <Stat
+            label="Modo"
+            value={summaryQuery.data.runtime.batchProcessingEnabled ? "Lote" : "1 a 1"}
+            accent="warning"
+            icon={<Activity className="size-4" />}
+          />
+          <Stat
+            label="Mailboxes ativos"
+            value={`${summaryQuery.data.runtime.activeMailboxes}/${summaryQuery.data.runtime.totalMailboxes}`}
+            accent="success"
+            icon={<Bot className="size-4" />}
+          />
+          <Stat
+            label="Ambiente"
+            value={summaryQuery.data.runtime.defaultEnvironment}
+            accent="ai"
+            icon={<Sparkles className="size-4" />}
+          />
+        </div>
+        <div className="mt-3 text-[12px] text-muted-foreground">
+          Limite {summaryQuery.data.runtime.maxEmailsPerRun} por ciclo, intervalo{" "}
+          {summaryQuery.data.runtime.batchIntervalMinutes} min,{" "}
+          {summaryQuery.data.runtime.latestSuccessfulSyncAt
+            ? `ultimo sync ${formatDateTime(summaryQuery.data.runtime.latestSuccessfulSyncAt)}`
+            : "sem sync automatico ainda"}.
+        </div>
+      </Card>
+
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Card className="xl:col-span-2 p-5">
           <SectionHeader

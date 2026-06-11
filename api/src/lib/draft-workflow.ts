@@ -2,6 +2,7 @@ import { DraftRouteSource, DraftRoutingStatus, DraftStatus, Prisma, ReviewAction
 import { prisma } from "./prisma.js";
 import { writeAuditLog } from "./audit.js";
 import { toNullablePrismaJson, toPrismaJson } from "./prisma-json.js";
+import { normalizeBrazilianDocument } from "./client-identity.js";
 
 type WorkflowState =
   | "draft_ai"
@@ -287,7 +288,11 @@ export async function listDraftDuplicateCandidates(input: {
         score += 3;
       }
 
-      if (candidate.cpfCnpj && draft.cpfCnpj && candidate.cpfCnpj === draft.cpfCnpj) {
+      if (
+        candidate.cpfCnpj &&
+        draft.cpfCnpj &&
+        normalizeBrazilianDocument(candidate.cpfCnpj) === normalizeBrazilianDocument(draft.cpfCnpj)
+      ) {
         score += 3;
       }
 

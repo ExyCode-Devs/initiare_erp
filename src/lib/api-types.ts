@@ -42,6 +42,18 @@ export interface AutomationSummaryResponse {
     lowConfidence: number;
     volume: number;
   };
+  runtime: {
+    emailIngestEnabled: boolean;
+    batchProcessingEnabled: boolean;
+    autoSyncMailboxes: boolean;
+    defaultEnvironment: "HOMOLOG" | "SANDBOX";
+    maxEmailsPerRun: number;
+    batchIntervalMinutes: number;
+    totalMailboxes: number;
+    activeMailboxes: number;
+    unhealthyMailboxes: number;
+    latestSuccessfulSyncAt: string | null;
+  };
   latestEmails: Array<{
     id: string;
     sender: string;
@@ -59,6 +71,20 @@ export interface AutomationSummaryResponse {
     startedAt: string;
     finishedAt: string | null;
   }>;
+}
+
+export interface AutomationSettingsResponse {
+  settings: {
+    emailIngestEnabled: boolean;
+    batchProcessingEnabled: boolean;
+    autoSyncMailboxes: boolean;
+    autoTestIntegrations: boolean;
+    draftAutoReprocess: boolean;
+    notificationDigestEnabled: boolean;
+    defaultEnvironment: "HOMOLOG" | "SANDBOX";
+    maxEmailsPerRun: number;
+    batchIntervalMinutes: number;
+  };
 }
 
 export interface MailboxesResponse {
