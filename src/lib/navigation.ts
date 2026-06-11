@@ -1,3 +1,5 @@
+const isProduction = import.meta.env.PROD;
+
 export const navItems = [
   {
     group: "Operacional",
@@ -5,6 +7,7 @@ export const navItems = [
       { label: "Dashboard", to: "/", icon: "LayoutDashboard" },
       { label: "Operacoes", to: "/operacoes", icon: "Activity" },
       { label: "Validacao Financeira", to: "/validacao-financeira", icon: "ClipboardCheck" },
+      { label: "Advanced Ops", to: "/advanced-ops", icon: "Layers3" },
       { label: "Contas a Pagar", to: "/contas-a-pagar", icon: "ArrowUpRight" },
       { label: "Contas a Receber", to: "/contas-a-receber", icon: "ArrowDownLeft" },
       { label: "Conciliacao", to: "/conciliacao", icon: "GitMerge" },
@@ -16,8 +19,8 @@ export const navItems = [
     items: [
       { label: "Central IA", to: "/central-ia", icon: "Sparkles" },
       { label: "Logs IA", to: "/logs-ia", icon: "Terminal" },
-      { label: "Fluxos", to: "/fluxos", icon: "Workflow" },
       { label: "Automacao", to: "/automacao", icon: "Zap" },
+      ...(!isProduction ? [{ label: "Fluxos", to: "/fluxos", icon: "Workflow" }] : []),
     ],
   },
   {

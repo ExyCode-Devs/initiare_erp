@@ -10,13 +10,17 @@ import { prisma } from "./lib/prisma.js";
 import authRoutes from "./routes/auth.js";
 import aiEventRoutes from "./routes/ai-events.js";
 import automationRoutes from "./routes/automation.js";
+import advancedOpsRoutes from "./routes/advanced-ops.js";
+import asaasRoutes from "./routes/asaas.js";
 import changelogRoutes from "./routes/changelog.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import dataRoutes from "./routes/data.js";
 import financialDraftRoutes from "./routes/financial-drafts.js";
 import inboxRoutes from "./routes/inbox.js";
+import legalEntityRoutes from "./routes/legal-entities.js";
 import mailboxRoutes from "./routes/mailboxes.js";
 import monitoringRoutes from "./routes/monitoring.js";
+import omieRoutes from "./routes/omie.js";
 
 export function buildApp() {
   const app = Fastify({
@@ -75,7 +79,8 @@ export function buildApp() {
 
   app.register(cors, {
     origin: [env.APP_ORIGIN],
-    credentials: true
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
   });
 
   app.register(helmet, {
@@ -124,10 +129,14 @@ export function buildApp() {
   app.register(aiEventRoutes, { prefix: "/api" });
   app.register(dashboardRoutes, { prefix: "/api" });
   app.register(dataRoutes, { prefix: "/api" });
+  app.register(legalEntityRoutes, { prefix: "/api" });
   app.register(mailboxRoutes, { prefix: "/api" });
   app.register(inboxRoutes, { prefix: "/api" });
   app.register(financialDraftRoutes, { prefix: "/api" });
+  app.register(omieRoutes, { prefix: "/api" });
+  app.register(asaasRoutes, { prefix: "/api" });
   app.register(automationRoutes, { prefix: "/api" });
+  app.register(advancedOpsRoutes, { prefix: "/api" });
   app.register(changelogRoutes, { prefix: "/api" });
   app.register(monitoringRoutes, { prefix: "/api/monitoring" });
 

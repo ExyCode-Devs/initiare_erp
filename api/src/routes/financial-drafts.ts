@@ -1,6 +1,26 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { approveDraft, patchDraftFields, rejectDraft } from "../lib/draft-workflow.js";
+import {
+  DraftRouteSource,
+  DraftRoutingStatus,
+  ErpEnvironment,
+  ErpProvider,
+  ErpSyncEntityType
+} from "@prisma/client";
+import {
+  approveDraft,
+  getDraftApprovalBlockers,
+  getDraftExecutionSummary,
+  getDraftWorkflowStatus,
+  listDraftDuplicateCandidates,
+  markDraftAsDuplicate,
+  patchDraftFields,
+  rejectDraft,
+  requestDraftReprocess,
+  undoDraftDuplicate
+} from "../lib/draft-workflow.js";
+import { getLegalEntityOrThrow } from "../lib/legal-entities.js";
+import { exportDraftToOmie, retryDraftExecution, runApprovedDraftExecution } from "../lib/omie-export-service.js";
 import { prisma } from "../lib/prisma.js";
 
 function mapLegacySource(item: {
@@ -31,6 +51,17 @@ function mapLegacySource(item: {
   };
 }
 
+function buildReviewSnapshot(item: Parameters<typeof getDraftApprovalBlockers>[0]) {
+  const blockers = getDraftApprovalBlockers(item);
+
+  return {
+    workflowStatus: getDraftWorkflowStatus(item),
+    execution: getDraftExecutionSummary(item),
+    blockers,
+    canApprove: blockers.length === 0
+  };
+}
+
 const financialDraftRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", app.authenticate);
 
@@ -52,8 +83,21 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
         direction: query.direction as never | undefined
       },
       include: {
+        legalEntity: true,
         sourceEvent: true,
-        sourceEmail: true
+        sourceEmail: true,
+        erpSyncRecords: {
+          where: {
+            provider: ErpProvider.OMIE,
+            entityType: {
+              in: [ErpSyncEntityType.ACCOUNT_PAYABLE, ErpSyncEntityType.ACCOUNT_RECEIVABLE]
+            }
+          },
+          orderBy: {
+            updatedAt: "desc"
+          },
+          take: 1
+        }
       },
       orderBy: {
         createdAt: "desc"
@@ -63,6 +107,7 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
 
     return {
       items: items.map((item) => ({
+        review: buildReviewSnapshot(item),
         id: item.id,
         direction: item.direction,
         partyName: item.partyName,
@@ -73,6 +118,11 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
         suggestedCategory: item.suggestedCategory,
         finalCategory: item.finalCategory,
         paymentMethod: item.paymentMethod,
+        legalEntityId: item.legalEntityId,
+        legalEntityName: item.legalEntity?.tradeName ?? item.legalEntity?.legalName ?? null,
+        routingStatus: item.routingStatus,
+        routingReason: item.routingReason,
+        routeSource: item.routeSource,
         confidenceScore: item.confidenceScore,
         confidenceBand: item.confidenceBand,
         status: item.status,
@@ -95,6 +145,15 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
                 id: item.sourceEmail.id,
                 sender: item.sourceEmail.sender,
                 subject: item.sourceEmail.subject
+              },
+        omieSync:
+          item.erpSyncRecords[0] == null
+            ? null
+            : {
+                environment: item.erpSyncRecords[0].environment,
+                status: item.erpSyncRecords[0].status,
+                externalId: item.erpSyncRecords[0].externalId,
+                errorMessage: item.erpSyncRecords[0].errorMessage
               }
       }))
     };
@@ -109,6 +168,7 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
         companyId: request.user.companyId
       },
       include: {
+        legalEntity: true,
         sourceEvent: true,
         aiRun: true,
         sourceEmail: {
@@ -130,11 +190,37 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
           orderBy: {
             createdAt: "desc"
           }
+        },
+        erpSyncRecords: {
+          where: {
+            provider: ErpProvider.OMIE
+          },
+          orderBy: {
+            updatedAt: "desc"
+          }
+        },
+        erpRequestLogs: {
+          where: {
+            connection: {
+              provider: ErpProvider.OMIE
+            }
+          },
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 15
         }
       }
     });
 
     return {
+      review: {
+        ...buildReviewSnapshot(item),
+        duplicateCandidates: await listDraftDuplicateCandidates({
+          draftId: item.id,
+          companyId: request.user.companyId
+        })
+      },
       id: item.id,
       direction: item.direction,
       partyName: item.partyName,
@@ -146,6 +232,11 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
       suggestedCategory: item.suggestedCategory,
       finalCategory: item.finalCategory,
       paymentMethod: item.paymentMethod,
+      legalEntityId: item.legalEntityId,
+      legalEntityName: item.legalEntity?.tradeName ?? item.legalEntity?.legalName ?? null,
+      routingStatus: item.routingStatus,
+      routingReason: item.routingReason,
+      routeSource: item.routeSource,
       bankData: item.bankData,
       notes: item.notes,
       confidenceScore: item.confidenceScore,
@@ -216,7 +307,29 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
         fieldDelta: review.fieldDelta,
         createdAt: review.createdAt.toISOString(),
         user: review.user
-      }))
+      })),
+      omieHistory: {
+        syncs: item.erpSyncRecords.map((record) => ({
+          id: record.id,
+          entityType: record.entityType,
+          environment: record.environment,
+          status: record.status,
+          externalId: record.externalId,
+          errorMessage: record.errorMessage,
+          syncedAt: record.syncedAt?.toISOString() ?? null,
+          createdAt: record.createdAt.toISOString()
+        })),
+        requests: item.erpRequestLogs.map((entry) => ({
+          id: entry.id,
+          endpoint: entry.endpoint,
+          method: entry.method,
+          httpStatus: entry.httpStatus,
+          operationStatus: entry.operationStatus,
+          friendlyError: entry.friendlyError,
+          technicalError: entry.technicalError,
+          createdAt: entry.createdAt.toISOString()
+        }))
+      }
     };
   });
 
@@ -239,9 +352,14 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
           finalCategory: z.string().nullable().optional(),
           paymentMethod: z.string().nullable().optional(),
           bankData: z.record(z.string(), z.unknown()).nullable().optional(),
-          notes: z.string().nullable().optional()
+          notes: z.string().nullable().optional(),
+          legalEntityId: z.string().nullable().optional()
         })
         .parse(request.body);
+
+      if (payload.legalEntityId) {
+        await getLegalEntityOrThrow(request.user.companyId, payload.legalEntityId);
+      }
 
       const draft = await patchDraftFields({
         draftId: params.id,
@@ -251,7 +369,12 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
           name: request.user.name,
           email: request.user.email
         },
-        values: payload
+        values: {
+          ...payload,
+          routingStatus: payload.legalEntityId ? DraftRoutingStatus.ROUTED : undefined,
+          routeSource: payload.legalEntityId ? DraftRouteSource.MANUAL : undefined,
+          routingReason: payload.legalEntityId ? "Legal entity manually assigned by analyst" : undefined
+        }
       });
 
       return {
@@ -266,10 +389,24 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
     {
       preHandler: app.authorize(["ADMIN", "ANALYST"])
     },
-    async (request) => {
+    async (request, reply) => {
       const params = z.object({ id: z.string().min(1) }).parse(request.params);
       const payload = z.object({ note: z.string().nullable().optional() }).parse(request.body ?? {});
-      const draft = await approveDraft({
+      const draft = await prisma.financialDraft.findFirstOrThrow({
+        where: {
+          id: params.id,
+          companyId: request.user.companyId
+        }
+      });
+      const blockers = getDraftApprovalBlockers(draft);
+      if (blockers.length > 0) {
+        reply.code(409);
+        return {
+          message: "Approval blocked by review rules.",
+          blockers
+        };
+      }
+      const approvedDraft = await approveDraft({
         draftId: params.id,
         companyId: request.user.companyId,
         user: {
@@ -277,7 +414,197 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
           name: request.user.name,
           email: request.user.email
         },
-        note: payload.note ?? null
+        note: payload.note ?? null,
+        environment: ErpEnvironment.HOMOLOG
+      });
+      const execution = await runApprovedDraftExecution({
+        companyId: request.user.companyId,
+        draftId: params.id,
+        environment: ErpEnvironment.HOMOLOG,
+        triggeredByUserId: request.user.sub
+      });
+
+      return {
+        id: approvedDraft.id,
+        status: approvedDraft.status,
+        execution
+      };
+    }
+  );
+
+  app.post(
+    "/financial-drafts/:id/retry-execution",
+    {
+      preHandler: app.authorize(["ADMIN", "ANALYST"])
+    },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const payload = z
+        .object({
+          environment: z.nativeEnum(ErpEnvironment).default(ErpEnvironment.HOMOLOG)
+        })
+        .parse(request.body ?? {});
+
+      return retryDraftExecution({
+        companyId: request.user.companyId,
+        draftId: params.id,
+        environment: payload.environment,
+        triggeredByUserId: request.user.sub
+      });
+    }
+  );
+
+  app.post(
+    "/financial-drafts/:id/omie-export",
+    {
+      preHandler: app.authorize(["ADMIN", "ANALYST"])
+    },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const payload = z
+        .object({
+          environment: z.nativeEnum(ErpEnvironment).default(ErpEnvironment.HOMOLOG)
+        })
+        .parse(request.body ?? {});
+
+      return exportDraftToOmie({
+        companyId: request.user.companyId,
+        draftId: params.id,
+        environment: payload.environment,
+        triggeredByUserId: request.user.sub
+      });
+    }
+  );
+
+  app.get("/financial-drafts/:id/omie-history", async (request) => {
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
+
+    const draft = await prisma.financialDraft.findFirstOrThrow({
+      where: {
+        id: params.id,
+        companyId: request.user.companyId
+      },
+      include: {
+        erpSyncRecords: {
+          where: {
+            provider: ErpProvider.OMIE
+          },
+          orderBy: {
+            createdAt: "desc"
+          }
+        },
+        erpRequestLogs: {
+          where: {
+            connection: {
+              provider: ErpProvider.OMIE
+            }
+          },
+          orderBy: {
+            createdAt: "desc"
+          }
+        }
+      }
+    });
+
+    return {
+      draftId: draft.id,
+      syncs: draft.erpSyncRecords.map((record) => ({
+        id: record.id,
+        entityType: record.entityType,
+        environment: record.environment,
+        status: record.status,
+        externalId: record.externalId,
+        errorMessage: record.errorMessage,
+        syncedAt: record.syncedAt?.toISOString() ?? null,
+        createdAt: record.createdAt.toISOString()
+      })),
+      requests: draft.erpRequestLogs.map((entry) => ({
+        id: entry.id,
+        endpoint: entry.endpoint,
+        method: entry.method,
+        httpStatus: entry.httpStatus,
+        operationStatus: entry.operationStatus,
+        friendlyError: entry.friendlyError,
+        technicalError: entry.technicalError,
+        createdAt: entry.createdAt.toISOString()
+      }))
+    };
+  });
+
+  app.post(
+    "/financial-drafts/:id/mark-duplicate",
+    {
+      preHandler: app.authorize(["ADMIN", "ANALYST"])
+    },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const payload = z
+        .object({
+          duplicateOfId: z.string().min(1),
+          note: z.string().nullable().optional()
+        })
+        .parse(request.body);
+
+      const draft = await markDraftAsDuplicate({
+        draftId: params.id,
+        companyId: request.user.companyId,
+        duplicateOfId: payload.duplicateOfId,
+        note: payload.note ?? null,
+        user: {
+          id: request.user.sub,
+          name: request.user.name,
+          email: request.user.email
+        }
+      });
+
+      return {
+        id: draft.id,
+        status: draft.status
+      };
+    }
+  );
+
+  app.post(
+    "/financial-drafts/:id/undo-duplicate",
+    {
+      preHandler: app.authorize(["ADMIN", "ANALYST"])
+    },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const draft = await undoDraftDuplicate({
+        draftId: params.id,
+        companyId: request.user.companyId,
+        user: {
+          id: request.user.sub,
+          name: request.user.name,
+          email: request.user.email
+        }
+      });
+
+      return {
+        id: draft.id,
+        status: draft.status
+      };
+    }
+  );
+
+  app.post(
+    "/financial-drafts/:id/request-reprocess",
+    {
+      preHandler: app.authorize(["ADMIN", "ANALYST"])
+    },
+    async (request) => {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const payload = z.object({ note: z.string().nullable().optional() }).parse(request.body ?? {});
+      const draft = await requestDraftReprocess({
+        draftId: params.id,
+        companyId: request.user.companyId,
+        note: payload.note ?? null,
+        user: {
+          id: request.user.sub,
+          name: request.user.name,
+          email: request.user.email
+        }
       });
 
       return {

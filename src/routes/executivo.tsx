@@ -57,8 +57,8 @@ function Executivo() {
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Receita" value={formatCurrency(data.stats.revenue)} delta={{ value: data.stats.revenueDelta, positive: true }} accent="success" icon={<TrendingUp className="size-4" />} />
-        <Stat label="EBITDA" value={formatCurrency(data.stats.ebitda)} delta={{ value: data.stats.ebitdaDelta, positive: true }} accent="ai" icon={<ArrowUp className="size-4" />} />
+        <Stat label="Receita" value={formatCurrency(data.stats.revenue)} delta={{ value: data.stats.revenueDelta, positive: data.stats.revenueDelta !== "0%" }} accent="success" icon={<TrendingUp className="size-4" />} />
+        <Stat label="EBITDA" value={formatCurrency(data.stats.ebitda)} delta={{ value: data.stats.ebitdaDelta, positive: data.stats.ebitdaDelta !== "0%" }} accent="ai" icon={<ArrowUp className="size-4" />} />
         <Stat label="Despesas" value={formatCurrency(data.stats.expense)} delta={{ value: data.stats.expenseDelta, positive: false }} accent="warning" icon={<ArrowDown className="size-4" />} />
         <Stat label="Inadimplência" value={data.stats.delinquencyRate} delta={{ value: data.stats.delinquencyDelta, positive: true }} accent="info" icon={<TrendingDown className="size-4" />} />
       </div>

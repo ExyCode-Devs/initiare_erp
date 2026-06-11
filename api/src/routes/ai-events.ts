@@ -2,7 +2,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { env } from "../config/env.js";
-import { ingestExternalNormalizedDraft, resolveDefaultCompanyId } from "../lib/ai-draft-service.js";
+import { ingestExternalNormalizedDraft } from "../lib/ai-draft-service.js";
+import { resolveCompanyFromDraftRoute } from "../lib/legal-entities.js";
 
 const legacyRouteMessage = "Legacy AI ingress disabled. Use /api/ai/events/financial-drafts.";
 
@@ -13,9 +14,12 @@ const financialDirectionSchema = z
 const payloadSchema = z.object({
   eventId: z.string().min(1),
   occurredAt: z.string().datetime(),
+  targetCnpj: z.string().optional().nullable(),
   source: z.object({
     channel: z.string().min(2),
     sender: z.string().optional().nullable(),
+    recipient: z.string().optional().nullable(),
+    mailbox: z.string().optional().nullable(),
     subject: z.string().optional().nullable(),
     summary: z.string().optional().nullable(),
     attachments: z.array(z.record(z.string(), z.unknown())).optional().default([])
@@ -84,15 +88,34 @@ const aiEventRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const payload = payloadSchema.parse(request.body);
-    const companyId = await resolveDefaultCompanyId();
+    const route = await resolveCompanyFromDraftRoute({
+      targetCnpj: payload.targetCnpj ?? payload.draft.cpfCnpj ?? null,
+      recipient: payload.source.recipient ?? null,
+      mailbox: payload.source.mailbox ?? null
+    });
+
+    if (!route.companyId) {
+      reply.code(422);
+      return {
+        ok: false,
+        message: route.routingReason ?? "Unable to resolve workspace for inbound draft",
+        routingStatus: route.routingStatus,
+        routeSource: route.routeSource
+      };
+    }
+
     const result = await ingestExternalNormalizedDraft({
-      companyId,
+      companyId: route.companyId,
+      legalEntityId: route.legalEntityId,
       eventId: payload.eventId,
       occurredAt: payload.occurredAt,
       originType: "ACTIVE_ACTIONS",
       source: payload.source,
       draft: payload.draft,
       ai: payload.ai,
+      routingStatus: route.routingStatus,
+      routeSource: route.routeSource,
+      routingReason: route.routingReason,
       rawPayload: payload
     });
 
@@ -101,7 +124,10 @@ const aiEventRoutes: FastifyPluginAsync = async (app) => {
       mode: result.mode,
       eventSourceId: result.eventSourceId,
       aiRunId: result.aiRunId,
-      draftId: result.draftId
+      draftId: result.draftId,
+      legalEntityId: route.legalEntityId,
+      routingStatus: route.routingStatus,
+      routeSource: route.routeSource
     };
   });
 

@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { normalizeAutomationSettings } from "../lib/automation-settings.js";
 import { prisma } from "../lib/prisma.js";
 
 const automationRoutes: FastifyPluginAsync = async (app) => {
@@ -7,10 +8,12 @@ const automationRoutes: FastifyPluginAsync = async (app) => {
   app.get("/automation/summary", async (request) => {
     const companyId = request.user.companyId;
     const [
-      events,
+      company,
+      mailboxes,
+      emails,
       drafts,
-      gatewayRuns,
-      totalEvents,
+      jobRuns,
+      totalEmails,
       processed,
       errorCount,
       pendingReview,
@@ -18,7 +21,21 @@ const automationRoutes: FastifyPluginAsync = async (app) => {
       rejected,
       lowConfidence,
     ] = await Promise.all([
-      prisma.aiEventSource.findMany({
+      prisma.company.findUniqueOrThrow({
+        where: { id: companyId },
+        select: { automationSettings: true },
+      }),
+      prisma.mailboxAccount.findMany({
+        where: { companyId },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          active: true,
+          lastSyncAt: true,
+          lastError: true,
+        },
+      }),
+      prisma.inboundEmail.findMany({
         where: { companyId },
         orderBy: { receivedAt: "desc" },
         take: 10,
@@ -26,24 +43,26 @@ const automationRoutes: FastifyPluginAsync = async (app) => {
       prisma.financialDraft.findMany({
         where: { companyId },
       }),
-      prisma.aiGatewayRun.findMany({
+      prisma.processingJobRun.findMany({
         where: { companyId },
         orderBy: { startedAt: "desc" },
         take: 5,
       }),
-      prisma.aiEventSource.count({
+      prisma.inboundEmail.count({
         where: { companyId },
       }),
-      prisma.aiEventSource.count({
+      prisma.inboundEmail.count({
         where: {
           companyId,
-          status: "PROCESSED",
+          status: {
+            in: ["PROCESSADO", "AGUARDANDO_VALIDACAO", "APROVADO"],
+          },
         },
       }),
-      prisma.aiGatewayRun.count({
+      prisma.processingJobRun.count({
         where: {
           companyId,
-          status: "ERRO",
+          status: "FAILED",
         },
       }),
       prisma.financialDraft.count({
@@ -75,10 +94,16 @@ const automationRoutes: FastifyPluginAsync = async (app) => {
     const volume = drafts
       .filter((item) => item.status !== "REJEITADO")
       .reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+    const settings = normalizeAutomationSettings(company.automationSettings);
+    const activeMailboxes = mailboxes.filter((item) => item.active);
+    const latestSuccessfulSync = activeMailboxes
+      .map((item) => item.lastSyncAt)
+      .filter((value): value is Date => Boolean(value))
+      .sort((left, right) => right.getTime() - left.getTime())[0] ?? null;
 
     return {
       stats: {
-        totalEmails: totalEvents,
+        totalEmails,
         processed,
         errorCount,
         pendingReview,
@@ -87,22 +112,34 @@ const automationRoutes: FastifyPluginAsync = async (app) => {
         lowConfidence,
         volume,
       },
-      latestEmails: events.map((item) => ({
+      runtime: {
+        emailIngestEnabled: settings.emailIngestEnabled,
+        batchProcessingEnabled: settings.batchProcessingEnabled,
+        autoSyncMailboxes: settings.autoSyncMailboxes,
+        defaultEnvironment: settings.defaultEnvironment,
+        maxEmailsPerRun: settings.maxEmailsPerRun,
+        batchIntervalMinutes: settings.batchIntervalMinutes,
+        totalMailboxes: mailboxes.length,
+        activeMailboxes: activeMailboxes.length,
+        unhealthyMailboxes: activeMailboxes.filter((item) => Boolean(item.lastError)).length,
+        latestSuccessfulSyncAt: latestSuccessfulSync?.toISOString() ?? null,
+      },
+      latestEmails: emails.map((item) => ({
         id: item.id,
-        sender: item.sender ?? item.channel,
-        subject: item.subject ?? item.summary ?? item.channel,
+        sender: item.sender,
+        subject: item.subject,
         status: item.status,
         receivedAt: item.receivedAt.toISOString(),
       })),
-      latestRuns: gatewayRuns.map((item) => ({
+      latestRuns: jobRuns.map((item) => ({
         id: item.id,
-        runType: item.provider,
-        status: item.status === "SUCESSO" ? "COMPLETED" : item.status === "ERRO" ? "FAILED" : "RUNNING",
-        fetchedCount: 1,
-        processedCount: item.status === "SUCESSO" ? 1 : 0,
-        errorCount: item.status === "ERRO" ? 1 : 0,
+        runType: item.runType,
+        status: item.status,
+        fetchedCount: item.fetchedCount,
+        processedCount: item.processedCount,
+        errorCount: item.errorCount,
         startedAt: item.startedAt.toISOString(),
-        finishedAt: item.completedAt?.toISOString() ?? null,
+        finishedAt: item.finishedAt?.toISOString() ?? null,
       })),
     };
   });

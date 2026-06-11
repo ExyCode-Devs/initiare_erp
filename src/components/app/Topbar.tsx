@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Search, Bell, MessageSquare, Plus, Sparkles, Command, Plug, Globe, LogOut } from "lucide-react";
 import { motion } from "framer-motion";
 import { apiRequest } from "@/lib/api";
+import type { ChangelogPublicResponse } from "@/lib/api-types";
 import { useAuth } from "@/hooks/use-auth";
 
 export function Topbar() {
-  const { company, logout } = useAuth();
+  const { activeCompany, logout, memberships, switchCompany } = useAuth();
   const { data } = useQuery({
     queryKey: ["topbar-monitoring"],
     queryFn: () =>
@@ -15,16 +17,36 @@ export function Topbar() {
       }>("/monitoring/summary"),
     staleTime: 60_000
   });
+  const notificationsQuery = useQuery({
+    queryKey: ["public-changelog"],
+    queryFn: () => apiRequest<ChangelogPublicResponse>("/changelog"),
+    staleTime: 60_000,
+  });
+  const unreadCount = notificationsQuery.data?.items.filter((item) => item.unread).length ?? 0;
 
   return (
     <header className="sticky top-0 z-30 h-14 border-b border-border bg-background/80 backdrop-blur-xl">
       <div className="h-full px-5 flex items-center gap-4">
         <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
           <Globe className="size-3.5" />
-          <span>{company?.domain ?? "app.veridia.local"}</span>
+          <span>{activeCompany?.domain ?? "app.veridia.local"}</span>
           <span className="text-border">/</span>
-          <span className="text-foreground font-medium">{company?.name ?? "Workspace"}</span>
+          <span className="text-foreground font-medium">{activeCompany?.name ?? "Workspace"}</span>
         </div>
+
+        {memberships.length > 1 ? (
+          <select
+            value={activeCompany?.id ?? ""}
+            onChange={(event) => void switchCompany(event.target.value)}
+            className="h-9 rounded-md border border-border bg-background px-3 text-[12px] text-foreground"
+          >
+            {memberships.map((membership) => (
+              <option key={membership.id} value={membership.company.id}>
+                {membership.company.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
 
         <div className="flex-1 max-w-xl mx-auto">
           <div className="relative group">
@@ -60,10 +82,22 @@ export function Topbar() {
           <span className="size-1.5 rounded-full bg-success" />
         </button>
 
-        <button className="relative size-9 grid place-items-center rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+        <Link
+          to="/novidades"
+          aria-label="Abrir central de notificacoes"
+          data-testid="topbar-notifications-link"
+          className="relative size-9 grid place-items-center rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+        >
           <Bell className="size-4" />
-          <span className="absolute top-2 right-2 size-1.5 rounded-full bg-warning" />
-        </button>
+          {unreadCount > 0 ? (
+            <span
+              data-testid="topbar-notifications-badge"
+              className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-warning text-[10px] leading-4 text-background text-center font-medium"
+            >
+              {unreadCount}
+            </span>
+          ) : null}
+        </Link>
 
         <a
           href="/chat"

@@ -7,16 +7,26 @@ declare module "@fastify/jwt" {
     payload: {
       sub: string;
       role: "ADMIN" | "ANALYST" | "VIEWER";
+      activeCompanyId: string;
       companyId: string;
       email: string;
       name: string;
+      tokenType?: "user" | "portal";
+      clientId?: string;
+      businessClientId?: string;
+      portalAccessId?: string;
     };
     user: {
       sub: string;
       role: "ADMIN" | "ANALYST" | "VIEWER";
+      activeCompanyId: string;
       companyId: string;
       email: string;
       name: string;
+      tokenType?: "user" | "portal";
+      clientId?: string;
+      businessClientId?: string;
+      portalAccessId?: string;
     };
   }
 }

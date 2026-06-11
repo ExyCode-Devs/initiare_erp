@@ -1,6 +1,7 @@
-import type { FinanceStatus, LogStatus, Severity } from "@prisma/client";
+import type { ErpProvider, FinanceStatus, LogStatus, Severity } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { normalizeAutomationSettings } from "../lib/automation-settings.js";
 import { prisma } from "../lib/prisma.js";
 
 const financeStatusMap: Record<FinanceStatus, string> = {
@@ -31,9 +32,31 @@ const automationStatusSchema = z.object({
   status: z.enum(["ACTIVE", "PAUSED"])
 });
 
+const companySettingsSchema = z.object({
+  name: z.string().trim().min(2),
+  domain: z.string().trim().min(2),
+  replyFromName: z.string().trim().nullable().optional(),
+  replyFromEmail: z.string().trim().email().nullable().optional(),
+  replyToEmail: z.string().trim().email().nullable().optional()
+});
+
+const automationSettingsUpdateSchema = z.object({
+  emailIngestEnabled: z.boolean(),
+  batchProcessingEnabled: z.boolean(),
+  autoSyncMailboxes: z.boolean(),
+  autoTestIntegrations: z.boolean(),
+  draftAutoReprocess: z.boolean(),
+  notificationDigestEnabled: z.boolean(),
+  defaultEnvironment: z.enum(["HOMOLOG", "SANDBOX"]),
+  maxEmailsPerRun: z.coerce.number().int().min(1).max(100),
+  batchIntervalMinutes: z.coerce.number().int().min(1).max(1440)
+});
+
 function formatMoney(value: number) {
   return `R$ ${value.toLocaleString("pt-BR")}`;
 }
+
+const isProduction = process.env.NODE_ENV === "production";
 
 const dataRoutes: FastifyPluginAsync = async (app) => {
   app.register(async (protectedApp) => {
@@ -116,7 +139,7 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
         stats: {
           total: formatMoney(total),
           dueIn7Days: formatMoney(dueIn7Days.reduce((sum, item) => sum + Number(item.amount), 0)),
-          delinquencyRate: "2.1%",
+          delinquencyRate: "0%",
           receivedMonth: formatMoney(received)
         },
         items: items.map((item) => ({
@@ -141,6 +164,7 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
         items: items.map((item) => ({
           id: item.id,
           name: item.name,
+          document: item.document,
           segment: item.segment,
           revenue: Number(item.annualRevenue),
           status: item.status,
@@ -322,6 +346,12 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
     );
 
     protectedApp.get("/flows", async (request) => {
+      if (isProduction) {
+        return {
+          items: []
+        };
+      }
+
       const items = await prisma.flow.findMany({
         where: { companyId: request.user.companyId },
         orderBy: { name: "asc" }
@@ -356,10 +386,49 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
     });
 
     protectedApp.get("/settings", async (request) => {
-      const [company, integrations] = await Promise.all([
+      const [company, integrations, erpConnections, aiLogCount, automationCount] = await Promise.all([
         prisma.company.findUniqueOrThrow({ where: { id: request.user.companyId } }),
-        prisma.integration.findMany({ where: { companyId: request.user.companyId }, orderBy: { name: "asc" } })
+        prisma.integration.findMany({ where: { companyId: request.user.companyId }, orderBy: { name: "asc" } }),
+        prisma.erpConnection.findMany({ where: { companyId: request.user.companyId } }),
+        prisma.aiLog.count({ where: { companyId: request.user.companyId } }),
+        prisma.automation.count({ where: { companyId: request.user.companyId } })
       ]);
+
+      const omieConnections = erpConnections.filter((item) => item.provider === "OMIE");
+      const asaasConnections = erpConnections.filter((item) => item.provider === "ASAAS");
+      const omieConnected = omieConnections.some((item) => item.enabled);
+      const asaasConnected = asaasConnections.some((item) => item.enabled);
+
+      const integrationItems = integrations.map((item) => ({
+        id: item.id,
+        name: item.name,
+        status: item.status === "CONNECTED" ? "connected" : "available",
+        desc: item.description
+      }));
+      const hasOmieCard = integrationItems.some((item) => item.name.toUpperCase() === "OMIE");
+      if (!hasOmieCard) {
+        integrationItems.unshift({
+          id: omieConnections[0]?.id ?? "omie",
+          name: "OMIE",
+          status: omieConnected ? "connected" : "available",
+          desc:
+            omieConnections.length === 0
+              ? "ERP principal. Configure homologacao e producao."
+              : `${omieConnections.length} conexao(oes) OMIE registradas.`
+        });
+      }
+      const hasAsaasCard = integrationItems.some((item) => item.name.toUpperCase() === "ASAAS");
+      if (!hasAsaasCard) {
+        integrationItems.unshift({
+          id: asaasConnections[0]?.id ?? "asaas",
+          name: "ASAAS",
+          status: asaasConnected ? "connected" : "available",
+          desc:
+            asaasConnections.length === 0
+              ? "Recebiveis e webhooks. Configure sandbox e producao."
+              : `${asaasConnections.length} conexao(oes) ASAAS registradas.`
+        });
+      }
 
       return {
         sections: [
@@ -374,22 +443,98 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
         company: {
           name: company.name,
           domain: company.domain,
-          companiesCount: company.companiesCount
+          companiesCount: company.companiesCount,
+          replyFromName: company.replyFromName,
+          replyFromEmail: company.replyFromEmail,
+          replyToEmail: company.replyToEmail
         },
-        integrations: integrations.map((item) => ({
-          id: item.id,
-          name: item.name,
-          status: item.status === "CONNECTED" ? "connected" : "available",
-          desc: item.description
-        })),
+        integrations: integrationItems,
         ai: [
-          { l: "Modelo padrao", v: "veridia-finance-v3.2" },
-          { l: "Threshold de autonomia", v: "90%", hint: "Decisoes abaixo disso vao para revisao humana" },
-          { l: "Modo agressivo", v: "Desativado", hint: "Permite a IA agir em casos de baixa confianca" },
-          { l: "Aprendizado continuo", v: "Ativado" }
+          { l: "Modelo padrao", v: aiLogCount > 0 ? "Configurado" : "Nao configurado" },
+          { l: "Threshold de autonomia", v: "Nao configurado", hint: "Defina quando a IA real estiver ativa." },
+          { l: "Modo agressivo", v: "Desativado", hint: "Nenhuma automacao de IA esta ativa sem pipeline configurado." },
+          { l: "Automações registradas", v: String(automationCount) }
         ]
       };
     });
+
+    protectedApp.patch(
+      "/settings/company",
+      {
+        preHandler: protectedApp.authorize(["ADMIN"])
+      },
+      async (request) => {
+        const payload = companySettingsSchema.parse(request.body);
+
+        const company = await prisma.company.update({
+          where: { id: request.user.companyId },
+          data: {
+            name: payload.name,
+            domain: payload.domain,
+            replyFromName: payload.replyFromName?.trim() || null,
+            replyFromEmail: payload.replyFromEmail?.trim().toLowerCase() || null,
+            replyToEmail: payload.replyToEmail?.trim().toLowerCase() || null
+          }
+        });
+
+        return {
+          company: {
+            id: company.id,
+            name: company.name,
+            domain: company.domain,
+            companiesCount: company.companiesCount,
+            replyFromName: company.replyFromName,
+            replyFromEmail: company.replyFromEmail,
+            replyToEmail: company.replyToEmail
+          }
+        };
+      }
+    );
+
+    protectedApp.get("/settings/automation", async (request) => {
+      const company = await prisma.company.findUniqueOrThrow({
+        where: { id: request.user.companyId },
+        select: { automationSettings: true }
+      });
+
+      return {
+        settings: normalizeAutomationSettings(company.automationSettings)
+      };
+    });
+
+    protectedApp.patch(
+      "/settings/automation",
+      {
+        preHandler: protectedApp.authorize(["ADMIN"])
+      },
+      async (request) => {
+        const payload = automationSettingsUpdateSchema.parse(request.body);
+
+        const company = await prisma.company.update({
+          where: { id: request.user.companyId },
+          data: {
+            automationSettings: payload
+          },
+          select: {
+            automationSettings: true
+          }
+        });
+
+        await prisma.auditLog.create({
+          data: {
+            action: "automation.settings.update",
+            resource: "company",
+            companyId: request.user.companyId,
+            userId: request.user.sub,
+            details: payload
+          }
+        });
+
+        return {
+          settings: normalizeAutomationSettings(company.automationSettings)
+        };
+      }
+    );
   });
 };
 

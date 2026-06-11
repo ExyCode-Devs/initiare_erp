@@ -15,8 +15,8 @@ function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const search = Route.useSearch();
-  const [email, setEmail] = useState("admin@veridia.local");
-  const [password, setPassword] = useState("ChangeMe123!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -70,7 +70,7 @@ function LoginPage() {
               <div className="text-sm uppercase tracking-[0.2em] text-white/50">Acesso seguro</div>
               <h2 className="text-2xl font-semibold mt-2">Entrar no Veridia</h2>
               <p className="text-sm text-white/60 mt-2">
-                Use o usuario seed inicial e altere as credenciais antes do acesso do cliente.
+                Entre com credenciais do tenant liberado para sua operacao.
               </p>
             </div>
 

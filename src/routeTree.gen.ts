@@ -28,6 +28,7 @@ import { Route as ClientesRouteImport } from './routes/clientes'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as CentralIaRouteImport } from './routes/central-ia'
 import { Route as AutomacaoRouteImport } from './routes/automacao'
+import { Route as AdvancedOpsRouteImport } from './routes/advanced-ops'
 import { Route as IndexRouteImport } from './routes/index'
 
 const ValidacaoFinanceiraRoute = ValidacaoFinanceiraRouteImport.update({
@@ -125,6 +126,11 @@ const AutomacaoRoute = AutomacaoRouteImport.update({
   path: '/automacao',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdvancedOpsRoute = AdvancedOpsRouteImport.update({
+  id: '/advanced-ops',
+  path: '/advanced-ops',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -133,6 +139,7 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/advanced-ops': typeof AdvancedOpsRoute
   '/automacao': typeof AutomacaoRoute
   '/central-ia': typeof CentralIaRoute
   '/chat': typeof ChatRoute
@@ -155,6 +162,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/advanced-ops': typeof AdvancedOpsRoute
   '/automacao': typeof AutomacaoRoute
   '/central-ia': typeof CentralIaRoute
   '/chat': typeof ChatRoute
@@ -178,6 +186,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/advanced-ops': typeof AdvancedOpsRoute
   '/automacao': typeof AutomacaoRoute
   '/central-ia': typeof CentralIaRoute
   '/chat': typeof ChatRoute
@@ -202,6 +211,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/advanced-ops'
     | '/automacao'
     | '/central-ia'
     | '/chat'
@@ -224,6 +234,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/advanced-ops'
     | '/automacao'
     | '/central-ia'
     | '/chat'
@@ -246,6 +257,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/advanced-ops'
     | '/automacao'
     | '/central-ia'
     | '/chat'
@@ -269,6 +281,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdvancedOpsRoute: typeof AdvancedOpsRoute
   AutomacaoRoute: typeof AutomacaoRoute
   CentralIaRoute: typeof CentralIaRoute
   ChatRoute: typeof ChatRoute
@@ -425,6 +438,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AutomacaoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/advanced-ops': {
+      id: '/advanced-ops'
+      path: '/advanced-ops'
+      fullPath: '/advanced-ops'
+      preLoaderRoute: typeof AdvancedOpsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -437,6 +457,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdvancedOpsRoute: AdvancedOpsRoute,
   AutomacaoRoute: AutomacaoRoute,
   CentralIaRoute: CentralIaRoute,
   ChatRoute: ChatRoute,

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { CheckCircle2, FileText, Save, ShieldAlert, XCircle } from "lucide-react";
+import { CheckCircle2, CopyMinus, FileText, RefreshCcw, Save, ShieldAlert, XCircle } from "lucide-react";
 import {
   Card,
   ConfidenceBar,
@@ -13,7 +13,7 @@ import {
 import { InlineError, InlineState } from "@/components/app/state";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/api";
-import type { FinancialDraftDetailResponse, FinancialDraftListResponse } from "@/lib/api-types";
+import type { FinancialDraftDetailResponse, FinancialDraftListResponse, LegalEntitiesResponse } from "@/lib/api-types";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +28,7 @@ type DraftFormState = {
   finalCategory: string;
   paymentMethod: string;
   notes: string;
+  legalEntityId: string;
 };
 
 const emptyDraftForm: DraftFormState = {
@@ -41,6 +42,7 @@ const emptyDraftForm: DraftFormState = {
   finalCategory: "",
   paymentMethod: "",
   notes: "",
+  legalEntityId: "",
 };
 
 export const Route = createFileRoute("/validacao-financeira")({
@@ -57,6 +59,17 @@ function formatDateTime(value: string | null) {
 }
 
 function humanStatus(status: string) {
+  if (status === "pending_review") return "Em revisao";
+  if (status === "edited") return "Editado";
+  if (status === "approved") return "Aprovado";
+  if (status === "rejected") return "Rejeitado";
+  if (status === "duplicated") return "Duplicado";
+  if (status === "draft_ai") return "Rascunho IA";
+  if (status === "draft_integration") return "Rascunho integracao";
+  if (status === "queued") return "Na fila";
+  if (status === "running") return "Enviando";
+  if (status === "success") return "Concluido";
+  if (status === "error") return "Erro integracao";
   if (status === "PENDENTE_REVISAO") return "Em revisao";
   if (status === "APROVADO") return "Processado";
   if (status === "REJEITADO") return "Excecao";
@@ -65,8 +78,85 @@ function humanStatus(status: string) {
   if (status === "BAIXA") return "Baixa";
   if (status === "RECEIVED" || status === "PENDENTE") return "Pendente";
   if (status === "PROCESSED" || status === "SUCESSO") return "Processado";
+  if (status === "SUCCESS") return "Processado";
+  if (status === "ERROR") return "Excecao";
+  if (status === "BLOCKED") return "Em revisao";
   if (status === "FAILED" || status === "ERRO") return "Excecao";
   return status;
+}
+
+function getApprovalGateSnapshot(detail: FinancialDraftDetailResponse) {
+  const execution = detail.review.execution;
+
+  if (execution?.status === "queued") {
+    return {
+      status: "Na fila local",
+      nextAction: "Aguardando worker ou execucao manual.",
+      externalState: "Nao concluido no ERP",
+    };
+  }
+
+  if (execution?.status === "running") {
+    return {
+      status: "Executando integracao",
+      nextAction: "Fluxo em andamento.",
+      externalState: "Processando no ERP",
+    };
+  }
+
+  if (execution?.status === "success") {
+    return {
+      status: "Concluido",
+      nextAction: "Registro sincronizado.",
+      externalState: "Criado no ERP",
+    };
+  }
+
+  if (execution?.status === "error") {
+    return {
+      status: "Erro de execucao",
+      nextAction: "Corrigir e reenviar execucao.",
+      externalState: "Falha no ERP",
+    };
+  }
+
+  if (detail.review.workflowStatus === "duplicated") {
+    return {
+      status: "Bloqueado por duplicidade",
+      nextAction: "Desfazer duplicado ou manter rejeitado.",
+      externalState: "Nao enviado",
+    };
+  }
+
+  if (detail.review.workflowStatus === "rejected") {
+    return {
+      status: "Rejeitado",
+      nextAction: "Sem envio externo.",
+      externalState: "Nao enviado",
+    };
+  }
+
+  if (detail.review.blockers.length > 0) {
+    return {
+      status: "Bloqueado",
+      nextAction: "Corrigir campos e remover blockers.",
+      externalState: "Nao enviado",
+    };
+  }
+
+  if (detail.review.canApprove) {
+    return {
+      status: "Pronto para aprovacao",
+      nextAction: "Pode aprovar quando revisar os dados.",
+      externalState: "Nao enviado",
+    };
+  }
+
+  return {
+    status: "Em revisao",
+    nextAction: "Analise humana pendente.",
+    externalState: "Nao enviado",
+  };
 }
 
 function getSourceTitle(detail: FinancialDraftDetailResponse) {
@@ -170,6 +260,10 @@ function ValidacaoFinanceiraPage() {
     queryFn: () => apiRequest<FinancialDraftDetailResponse>(`/financial-drafts/${selectedDraftId}`),
     enabled: Boolean(selectedDraftId),
   });
+  const legalEntitiesQuery = useQuery({
+    queryKey: ["legal-entities"],
+    queryFn: () => apiRequest<LegalEntitiesResponse>("/settings/legal-entities"),
+  });
 
   useEffect(() => {
     if (!detailQuery.data) {
@@ -187,6 +281,7 @@ function ValidacaoFinanceiraPage() {
       finalCategory: detailQuery.data.finalCategory ?? "",
       paymentMethod: detailQuery.data.paymentMethod ?? "",
       notes: detailQuery.data.notes ?? "",
+      legalEntityId: detailQuery.data.legalEntityId ?? "",
     });
     setRejectReason(detailQuery.data.rejectionReason ?? "");
   }, [detailQuery.data]);
@@ -218,6 +313,7 @@ function ValidacaoFinanceiraPage() {
           finalCategory: formState.finalCategory || null,
           paymentMethod: formState.paymentMethod || null,
           notes: formState.notes || null,
+          legalEntityId: formState.legalEntityId || null,
         },
       }),
     onSuccess: refreshAll,
@@ -240,6 +336,48 @@ function ValidacaoFinanceiraPage() {
         method: "POST",
         body: {
           reason: rejectReason,
+        },
+      }),
+    onSuccess: refreshAll,
+  });
+
+  const retryExecutionMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/financial-drafts/${selectedDraftId}/retry-execution`, {
+        method: "POST",
+        body: {
+          environment: "HOMOLOG",
+        },
+      }),
+    onSuccess: refreshAll,
+  });
+
+  const markDuplicateMutation = useMutation({
+    mutationFn: (duplicateOfId: string) =>
+      apiRequest(`/financial-drafts/${selectedDraftId}/mark-duplicate`, {
+        method: "POST",
+        body: {
+          duplicateOfId,
+          note: rejectReason || "Marked as duplicate during review",
+        },
+      }),
+    onSuccess: refreshAll,
+  });
+
+  const undoDuplicateMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/financial-drafts/${selectedDraftId}/undo-duplicate`, {
+        method: "POST",
+      }),
+    onSuccess: refreshAll,
+  });
+
+  const reprocessMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/financial-drafts/${selectedDraftId}/request-reprocess`, {
+        method: "POST",
+        body: {
+          note: rejectReason || null,
         },
       }),
     onSuccess: refreshAll,
@@ -275,12 +413,15 @@ function ValidacaoFinanceiraPage() {
   const detail = detailQuery.data;
   const attachments = detail ? normalizeAttachments(detail) : [];
   const runs = detail ? normalizeRuns(detail) : [];
+  const latestOmieSync = detail?.omieHistory.syncs[0] ?? null;
+  const execution = detail?.review.execution ?? null;
+  const approvalGate = detail ? getApprovalGateSnapshot(detail) : null;
 
   return (
     <div className="max-w-[1480px] mx-auto px-6 py-8 space-y-6">
       <PageHeader
         title="Validacao Financeira"
-        desc="Fila humana para editar, aprovar ou rejeitar drafts vindos de AI events."
+        desc="Fila humana para editar, aprovar ou rejeitar pre-entradas vindas do intake financeiro."
       />
 
       {!canReview ? (
@@ -355,13 +496,18 @@ function ValidacaoFinanceiraPage() {
                       <span>{item.dueDate ? item.dueDate.slice(0, 10) : "Sem vencimento"}</span>
                     </div>
                   </div>
-                  <div className="space-y-1 text-right">
-                    <StatusBadge status={humanStatus(item.status)} />
-                    <StatusBadge status={humanStatus(item.confidenceBand)} />
+                    <div className="space-y-1 text-right">
+                      <StatusBadge status={humanStatus(item.status)} />
+                      <StatusBadge status={humanStatus(item.review.workflowStatus)} />
+                    </div>
                   </div>
-                </div>
-              </button>
-            ))}
+                  {item.review.blockers.length ? (
+                    <div className="mt-2 text-[11px] text-warning">
+                      {item.review.blockers[0]?.message}
+                    </div>
+                  ) : null}
+                </button>
+              ))}
           </div>
         </Card>
 
@@ -382,9 +528,46 @@ function ValidacaoFinanceiraPage() {
                 </div>
                 <div className="space-y-1 text-right">
                   <StatusBadge status={humanStatus(detail.status)} />
-                  <StatusBadge status={humanStatus(detail.confidenceBand)} />
+                  <StatusBadge status={humanStatus(detail.review.workflowStatus)} />
                 </div>
               </div>
+
+              {approvalGate ? (
+                <div className="rounded-xl border border-border bg-background/60 p-4" data-testid="draft-approval-gate">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Approval gate</div>
+                      <div className="mt-1 text-[16px] font-semibold">{approvalGate.status}</div>
+                    </div>
+                    <StatusBadge status={approvalGate.status} />
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-[12px]">
+                    <div className="rounded-lg border border-border bg-card px-3 py-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Proximo passo</div>
+                      <div className="mt-1">{approvalGate.nextAction}</div>
+                    </div>
+                    <div className="rounded-lg border border-border bg-card px-3 py-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Estado externo</div>
+                      <div className="mt-1">{approvalGate.externalState}</div>
+                    </div>
+                    <div className="rounded-lg border border-border bg-card px-3 py-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Workflow</div>
+                      <div className="mt-1">{humanStatus(detail.review.workflowStatus)}</div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {detail.review.blockers.length ? (
+                <div className="rounded-xl border border-warning/25 bg-warning/10 px-4 py-3">
+                  <div className="text-[11px] uppercase tracking-wider text-warning">Approval blockers</div>
+                  <div className="mt-2 space-y-1 text-[12px] text-warning">
+                    {detail.review.blockers.map((blocker) => (
+                      <div key={blocker.code}>{blocker.message}</div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="rounded-xl border border-border bg-background/60 p-4">
                 <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Confianca calculada</div>
@@ -400,7 +583,7 @@ function ValidacaoFinanceiraPage() {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="space-y-4">
-                  <SectionHeader title="Campos extraidos" desc="App valida e decide. Active Actions envia evento normalizado." />
+                  <SectionHeader title="Campos extraidos" desc="App valida e decide. Inbox e adaptadores alimentam a mesma fila revisavel." />
                   <div className="grid grid-cols-2 gap-3">
                     <input value={formState.partyName} onChange={(event) => setFormState((current) => ({ ...current, partyName: event.target.value }))} className="h-9 rounded-md border border-border bg-background px-3 text-[12.5px]" placeholder="Parte" disabled={!canReview} />
                     <input value={formState.cpfCnpj} onChange={(event) => setFormState((current) => ({ ...current, cpfCnpj: event.target.value }))} className="h-9 rounded-md border border-border bg-background px-3 text-[12.5px]" placeholder="CPF/CNPJ" disabled={!canReview} />
@@ -410,6 +593,14 @@ function ValidacaoFinanceiraPage() {
                     <input value={formState.paymentMethod} onChange={(event) => setFormState((current) => ({ ...current, paymentMethod: event.target.value }))} className="h-9 rounded-md border border-border bg-background px-3 text-[12.5px]" placeholder="Metodo" disabled={!canReview} />
                     <input value={formState.suggestedCategory} onChange={(event) => setFormState((current) => ({ ...current, suggestedCategory: event.target.value }))} className="h-9 rounded-md border border-border bg-background px-3 text-[12.5px]" placeholder="Categoria sugerida" disabled={!canReview} />
                     <input value={formState.finalCategory} onChange={(event) => setFormState((current) => ({ ...current, finalCategory: event.target.value }))} className="h-9 rounded-md border border-border bg-background px-3 text-[12.5px]" placeholder="Categoria final" disabled={!canReview} />
+                    <select value={formState.legalEntityId} onChange={(event) => setFormState((current) => ({ ...current, legalEntityId: event.target.value }))} className="h-9 rounded-md border border-border bg-background px-3 text-[12.5px] col-span-2" disabled={!canReview}>
+                      <option value="">Sem roteamento</option>
+                      {legalEntitiesQuery.data?.items.map((entity) => (
+                        <option key={entity.id} value={entity.id}>
+                          {entity.tradeName || entity.legalName}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <textarea value={formState.description} onChange={(event) => setFormState((current) => ({ ...current, description: event.target.value }))} className="min-h-[110px] w-full rounded-md border border-border bg-background px-3 py-2 text-[12.5px]" placeholder="Descricao" disabled={!canReview} />
                   <textarea value={formState.notes} onChange={(event) => setFormState((current) => ({ ...current, notes: event.target.value }))} className="min-h-[90px] w-full rounded-md border border-border bg-background px-3 py-2 text-[12.5px]" placeholder="Notas internas" disabled={!canReview} />
@@ -446,9 +637,9 @@ function ValidacaoFinanceiraPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-border bg-background/60 p-4">
-                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">AI run</div>
-                    <div className="space-y-2">
+                    <div className="rounded-xl border border-border bg-background/60 p-4">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">AI run</div>
+                      <div className="space-y-2">
                       {runs.length ? (
                         runs.map((run) => (
                           <div key={run.id} className="rounded-lg border border-border bg-card px-3 py-2">
@@ -464,13 +655,105 @@ function ValidacaoFinanceiraPage() {
                             ) : null}
                           </div>
                         ))
+                        ) : (
+                          <div className="rounded-lg border border-border bg-card px-3 py-2 text-[12px] text-muted-foreground">
+                            No AI run data.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-border bg-background/60 p-4">
+                      <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Duplicate candidates</div>
+                      <div className="space-y-2">
+                        {detail.review.duplicateCandidates.length ? (
+                          detail.review.duplicateCandidates.map((candidate) => (
+                            <div key={candidate.id} className="rounded-lg border border-border bg-card px-3 py-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <div>
+                                  <div className="font-medium text-[12px]">{candidate.partyName}</div>
+                                  <div className="text-[11px] text-muted-foreground">
+                                    score {candidate.score} · {candidate.amount ? formatCurrency(candidate.amount) : "Sem valor"}
+                                  </div>
+                                </div>
+                                {canReview ? (
+                                  <button
+                                    onClick={() => markDuplicateMutation.mutate(candidate.id)}
+                                    className="h-8 px-2.5 rounded-md border border-warning/30 text-warning text-[12px] hover:bg-warning/5"
+                                  >
+                                    Marcar duplicado
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="rounded-lg border border-border bg-card px-3 py-2 text-[12px] text-muted-foreground">
+                            No duplicate candidates found.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-border bg-background/60 p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Execution flow</div>
+                        <div className="mt-1 text-[12px] text-muted-foreground">
+                          Approval queues execution. Successful provider creation mirrors local records after OMIE returns.
+                        </div>
+                      </div>
+                      {execution ? <StatusBadge status={humanStatus(execution.status)} /> : null}
+                    </div>
+
+                    <div className="mt-3 rounded-lg border border-border bg-card px-3 py-3 text-[12px]">
+                      <div>Status atual: {execution ? humanStatus(execution.status) : "Sem execucao"}</div>
+                      <div className="mt-1 text-muted-foreground">
+                        Ambiente: {execution?.environment ?? "HOMOLOG"}
+                      </div>
+                      <div className="mt-1 text-muted-foreground">
+                        ID externo: {execution?.externalEntryId ?? latestOmieSync?.externalId ?? "-"}
+                      </div>
+                      <div className="mt-1 text-muted-foreground">
+                        Parte externa: {execution?.externalPartyId ?? "-"}
+                      </div>
+                      <div className="mt-1 text-muted-foreground">
+                        Tentativas: {String(execution?.retryCount ?? 0)}
+                      </div>
+                      {execution?.lastError ? (
+                        <div className="mt-2 text-destructive">{execution.lastError}</div>
+                      ) : latestOmieSync?.errorMessage ? (
+                        <div className="mt-2 text-destructive">{latestOmieSync.errorMessage}</div>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-3 space-y-2">
+                      {detail.omieHistory.requests.length ? (
+                        detail.omieHistory.requests.slice(0, 4).map((entry) => (
+                          <div key={entry.id} className="rounded-lg border border-border bg-card px-3 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-[12px] font-medium">{entry.method} {entry.endpoint.split("/api/v1/")[1] ?? entry.endpoint}</div>
+                              <StatusBadge status={humanStatus(entry.operationStatus)} />
+                            </div>
+                            <div className="mt-1 text-[11px] text-muted-foreground">
+                              {formatDateTime(entry.createdAt)} {entry.httpStatus ? `· HTTP ${entry.httpStatus}` : ""}
+                            </div>
+                            {entry.friendlyError ? <div className="mt-1 text-[11px] text-destructive">{entry.friendlyError}</div> : null}
+                          </div>
+                        ))
                       ) : (
                         <div className="rounded-lg border border-border bg-card px-3 py-2 text-[12px] text-muted-foreground">
-                          No AI run data.
+                          No OMIE request history.
                         </div>
                       )}
                     </div>
                   </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <StatusBadge status={humanStatus(detail.routingStatus)} />
+                    <StatusBadge status={detail.routeSource} />
+                    <StatusBadge status={detail.legalEntityName ?? "Sem entidade"} />
+                  </div>
+                  {detail.routingReason ? <div className="mt-2 text-[12px] text-muted-foreground">{detail.routingReason}</div> : null}
                 </div>
               </div>
 
@@ -497,8 +780,29 @@ function ValidacaoFinanceiraPage() {
                   <button onClick={() => saveMutation.mutate()} disabled={!canReview || saveMutation.isPending} data-testid="draft-save-button" className="h-9 px-3 rounded-md border border-border text-[12.5px] inline-flex items-center gap-1.5 hover:bg-accent disabled:opacity-60">
                     <Save className="size-3.5" /> Salvar ajustes
                   </button>
-                  <button onClick={() => approveMutation.mutate()} disabled={!canReview || approveMutation.isPending} data-testid="draft-approve-button" className="h-9 px-3 rounded-md bg-foreground text-background text-[12.5px] font-medium inline-flex items-center gap-1.5 hover:opacity-90 disabled:opacity-60">
-                    <CheckCircle2 className="size-3.5" /> Aprovar
+                  <button onClick={() => approveMutation.mutate()} disabled={!canReview || approveMutation.isPending || !detail.review.canApprove} data-testid="draft-approve-button" className="h-9 px-3 rounded-md bg-foreground text-background text-[12.5px] font-medium inline-flex items-center gap-1.5 hover:opacity-90 disabled:opacity-60">
+                    <CheckCircle2 className="size-3.5" /> Aprovar e seguir fluxo
+                  </button>
+                  <button
+                    onClick={() => reprocessMutation.mutate()}
+                    disabled={!canReview || reprocessMutation.isPending}
+                    className="h-9 px-3 rounded-md border border-border text-[12.5px] inline-flex items-center gap-1.5 hover:bg-accent disabled:opacity-60"
+                  >
+                    <RefreshCcw className="size-3.5" /> Pedir reprocesso
+                  </button>
+                  <button
+                    onClick={() => undoDuplicateMutation.mutate()}
+                    disabled={!canReview || undoDuplicateMutation.isPending || detail.review.workflowStatus !== "duplicated"}
+                    className="h-9 px-3 rounded-md border border-info/30 text-info text-[12.5px] inline-flex items-center gap-1.5 hover:bg-info/5 disabled:opacity-60"
+                  >
+                    <CopyMinus className="size-3.5" /> Desfazer duplicado
+                  </button>
+                  <button
+                    onClick={() => retryExecutionMutation.mutate()}
+                    disabled={!canReview || retryExecutionMutation.isPending || detail.review.execution?.status !== "error"}
+                    className="h-9 px-3 rounded-md border border-ai/30 text-ai text-[12.5px] inline-flex items-center gap-1.5 hover:bg-ai/5 disabled:opacity-60"
+                  >
+                    <RefreshCcw className="size-3.5" /> Reenviar execucao
                   </button>
                   <button onClick={() => rejectMutation.mutate()} disabled={!canReview || rejectMutation.isPending || rejectReason.trim().length < 3} data-testid="draft-reject-button" className="h-9 px-3 rounded-md border border-destructive/30 text-destructive text-[12.5px] inline-flex items-center gap-1.5 hover:bg-destructive/5 disabled:opacity-60">
                     <XCircle className="size-3.5" /> Rejeitar
