@@ -56,6 +56,10 @@ function formatMoney(value: number) {
   return `R$ ${value.toLocaleString("pt-BR")}`;
 }
 
+function toIsoDate(value: Date | null | undefined) {
+  return value ? value.toISOString() : null;
+}
+
 const isProduction = process.env.NODE_ENV === "production";
 
 const dataRoutes: FastifyPluginAsync = async (app) => {
@@ -294,6 +298,173 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
           parsedPayload: item.parsedPayload,
           justification: item.justification
         }))
+      };
+    });
+
+    protectedApp.get("/integrations/errors", async (request) => {
+      const companyId = request.user.companyId;
+      const limit = z
+        .object({
+          limit: z.coerce.number().int().min(1).max(200).default(100)
+        })
+        .parse(request.query).limit;
+
+      const [requestErrors, webhookErrors, connectionErrors, mailboxErrors] = await Promise.all([
+        prisma.erpRequestLog.findMany({
+          where: {
+            companyId,
+            operationStatus: "ERROR"
+          },
+          include: {
+            connection: {
+              include: {
+                legalEntity: true
+              }
+            }
+          },
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: limit
+        }),
+        prisma.erpWebhookEvent.findMany({
+          where: {
+            companyId,
+            status: "ERROR"
+          },
+          include: {
+            connection: {
+              include: {
+                legalEntity: true
+              }
+            }
+          },
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: limit
+        }),
+        prisma.erpConnection.findMany({
+          where: {
+            companyId,
+            enabled: true,
+            lastError: {
+              not: null
+            }
+          },
+          include: {
+            legalEntity: true
+          },
+          orderBy: {
+            lastHealthcheckAt: "desc"
+          },
+          take: limit
+        }),
+        prisma.mailboxAccount.findMany({
+          where: {
+            companyId,
+            active: true,
+            lastError: {
+              not: null
+            }
+          },
+          include: {
+            legalEntity: true
+          },
+          orderBy: {
+            updatedAt: "desc"
+          },
+          take: limit
+        })
+      ]);
+
+      const items = [
+        ...requestErrors.map((item) => ({
+          id: `req:${item.id}`,
+          sourceType: "REQUEST",
+          provider: item.connection.provider,
+          environment: item.connection.environment,
+          legalEntityName: item.connection.legalEntity.tradeName?.trim() || item.connection.legalEntity.legalName,
+          title: `${item.connection.provider} request failed`,
+          message: item.friendlyError ?? item.technicalError ?? "External request failed",
+          technicalError: item.technicalError,
+          endpoint: item.endpoint,
+          method: item.method,
+          httpStatus: item.httpStatus,
+          draftId: item.draftId,
+          externalEventId: null,
+          connectionId: item.connectionId,
+          mailboxId: null,
+          occurredAt: item.createdAt.toISOString()
+        })),
+        ...webhookErrors.map((item) => ({
+          id: `webhook:${item.id}`,
+          sourceType: "WEBHOOK",
+          provider: item.provider,
+          environment: item.environment,
+          legalEntityName:
+            item.connection?.legalEntity.tradeName?.trim() || item.connection?.legalEntity.legalName || null,
+          title: `${item.provider} webhook failed`,
+          message: item.errorMessage ?? "Webhook processing failed",
+          technicalError: item.errorMessage,
+          endpoint: null,
+          method: "POST",
+          httpStatus: null,
+          draftId: null,
+          externalEventId: item.externalEventId,
+          connectionId: item.connectionId,
+          mailboxId: null,
+          occurredAt: item.createdAt.toISOString()
+        })),
+        ...connectionErrors.map((item) => ({
+          id: `connection:${item.id}:${item.lastHealthcheckAt?.toISOString() ?? item.updatedAt.toISOString()}`,
+          sourceType: "CONNECTION",
+          provider: item.provider,
+          environment: item.environment,
+          legalEntityName: item.legalEntity.tradeName?.trim() || item.legalEntity.legalName,
+          title: `${item.provider} connection unhealthy`,
+          message: item.lastError ?? "Connection healthcheck failed",
+          technicalError: item.lastError,
+          endpoint: item.baseUrl,
+          method: null,
+          httpStatus: null,
+          draftId: null,
+          externalEventId: null,
+          connectionId: item.id,
+          mailboxId: null,
+          occurredAt: toIsoDate(item.lastHealthcheckAt) ?? item.updatedAt.toISOString()
+        })),
+        ...mailboxErrors.map((item) => ({
+          id: `mailbox:${item.id}:${item.updatedAt.toISOString()}`,
+          sourceType: "MAILBOX",
+          provider: "MAILBOX",
+          environment: null,
+          legalEntityName: item.legalEntity?.tradeName?.trim() || item.legalEntity?.legalName || null,
+          title: "Mailbox sync failed",
+          message: item.lastError ?? "Mailbox processing failed",
+          technicalError: item.lastError,
+          endpoint: item.host,
+          method: null,
+          httpStatus: null,
+          draftId: null,
+          externalEventId: null,
+          connectionId: null,
+          mailboxId: item.id,
+          occurredAt: item.updatedAt.toISOString()
+        }))
+      ]
+        .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
+        .slice(0, limit);
+
+      return {
+        stats: {
+          total: items.length,
+          requestErrors: items.filter((item) => item.sourceType === "REQUEST").length,
+          webhookErrors: items.filter((item) => item.sourceType === "WEBHOOK").length,
+          connectionErrors: items.filter((item) => item.sourceType === "CONNECTION").length,
+          mailboxErrors: items.filter((item) => item.sourceType === "MAILBOX").length
+        },
+        items
       };
     });
 
