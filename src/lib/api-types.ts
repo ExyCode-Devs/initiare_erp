@@ -503,6 +503,34 @@ export interface AsaasWebhooksResponse {
   }>;
 }
 
+export interface IntegrationErrorsResponse {
+  stats: {
+    total: number;
+    requestErrors: number;
+    webhookErrors: number;
+    connectionErrors: number;
+    mailboxErrors: number;
+  };
+  items: Array<{
+    id: string;
+    sourceType: "REQUEST" | "WEBHOOK" | "CONNECTION" | "MAILBOX";
+    provider: "OMIE" | "ASAAS" | "MAILBOX";
+    environment: "HOMOLOG" | "SANDBOX" | "PRODUCTION" | null;
+    legalEntityName: string | null;
+    title: string;
+    message: string;
+    technicalError: string | null;
+    endpoint: string | null;
+    method: string | null;
+    httpStatus: number | null;
+    draftId: string | null;
+    externalEventId: string | null;
+    connectionId: string | null;
+    mailboxId: string | null;
+    occurredAt: string;
+  }>;
+}
+
 export interface ChangelogPublicResponse {
   items: Array<{
     id: string;

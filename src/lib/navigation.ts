@@ -19,6 +19,7 @@ export const navItems = [
     items: [
       { label: "Central IA", to: "/central-ia", icon: "Sparkles" },
       { label: "Logs IA", to: "/logs-ia", icon: "Terminal" },
+      { label: "Logs Integracoes", to: "/logs-integracoes", icon: "PlugZap" },
       { label: "Automacao", to: "/automacao", icon: "Zap" },
       ...(!isProduction ? [{ label: "Fluxos", to: "/fluxos", icon: "Workflow" }] : []),
     ],

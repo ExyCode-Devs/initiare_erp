@@ -13,6 +13,7 @@ import { Route as ValidacaoFinanceiraRouteImport } from './routes/validacao-fina
 import { Route as RelatoriosRouteImport } from './routes/relatorios'
 import { Route as OperacoesRouteImport } from './routes/operacoes'
 import { Route as NovidadesRouteImport } from './routes/novidades'
+import { Route as LogsIntegracoesRouteImport } from './routes/logs-integracoes'
 import { Route as LogsIaRouteImport } from './routes/logs-ia'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InboxFinanceiroRouteImport } from './routes/inbox-financeiro'
@@ -49,6 +50,11 @@ const OperacoesRoute = OperacoesRouteImport.update({
 const NovidadesRoute = NovidadesRouteImport.update({
   id: '/novidades',
   path: '/novidades',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LogsIntegracoesRoute = LogsIntegracoesRouteImport.update({
+  id: '/logs-integracoes',
+  path: '/logs-integracoes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LogsIaRoute = LogsIaRouteImport.update({
@@ -155,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/inbox-financeiro': typeof InboxFinanceiroRoute
   '/login': typeof LoginRoute
   '/logs-ia': typeof LogsIaRoute
+  '/logs-integracoes': typeof LogsIntegracoesRoute
   '/novidades': typeof NovidadesRoute
   '/operacoes': typeof OperacoesRoute
   '/relatorios': typeof RelatoriosRoute
@@ -178,6 +185,7 @@ export interface FileRoutesByTo {
   '/inbox-financeiro': typeof InboxFinanceiroRoute
   '/login': typeof LoginRoute
   '/logs-ia': typeof LogsIaRoute
+  '/logs-integracoes': typeof LogsIntegracoesRoute
   '/novidades': typeof NovidadesRoute
   '/operacoes': typeof OperacoesRoute
   '/relatorios': typeof RelatoriosRoute
@@ -202,6 +210,7 @@ export interface FileRoutesById {
   '/inbox-financeiro': typeof InboxFinanceiroRoute
   '/login': typeof LoginRoute
   '/logs-ia': typeof LogsIaRoute
+  '/logs-integracoes': typeof LogsIntegracoesRoute
   '/novidades': typeof NovidadesRoute
   '/operacoes': typeof OperacoesRoute
   '/relatorios': typeof RelatoriosRoute
@@ -227,6 +236,7 @@ export interface FileRouteTypes {
     | '/inbox-financeiro'
     | '/login'
     | '/logs-ia'
+    | '/logs-integracoes'
     | '/novidades'
     | '/operacoes'
     | '/relatorios'
@@ -250,6 +260,7 @@ export interface FileRouteTypes {
     | '/inbox-financeiro'
     | '/login'
     | '/logs-ia'
+    | '/logs-integracoes'
     | '/novidades'
     | '/operacoes'
     | '/relatorios'
@@ -273,6 +284,7 @@ export interface FileRouteTypes {
     | '/inbox-financeiro'
     | '/login'
     | '/logs-ia'
+    | '/logs-integracoes'
     | '/novidades'
     | '/operacoes'
     | '/relatorios'
@@ -297,6 +309,7 @@ export interface RootRouteChildren {
   InboxFinanceiroRoute: typeof InboxFinanceiroRoute
   LoginRoute: typeof LoginRoute
   LogsIaRoute: typeof LogsIaRoute
+  LogsIntegracoesRoute: typeof LogsIntegracoesRoute
   NovidadesRoute: typeof NovidadesRoute
   OperacoesRoute: typeof OperacoesRoute
   RelatoriosRoute: typeof RelatoriosRoute
@@ -331,6 +344,13 @@ declare module '@tanstack/react-router' {
       path: '/novidades'
       fullPath: '/novidades'
       preLoaderRoute: typeof NovidadesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logs-integracoes': {
+      id: '/logs-integracoes'
+      path: '/logs-integracoes'
+      fullPath: '/logs-integracoes'
+      preLoaderRoute: typeof LogsIntegracoesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/logs-ia': {
@@ -473,6 +493,7 @@ const rootRouteChildren: RootRouteChildren = {
   InboxFinanceiroRoute: InboxFinanceiroRoute,
   LoginRoute: LoginRoute,
   LogsIaRoute: LogsIaRoute,
+  LogsIntegracoesRoute: LogsIntegracoesRoute,
   NovidadesRoute: NovidadesRoute,
   OperacoesRoute: OperacoesRoute,
   RelatoriosRoute: RelatoriosRoute,
