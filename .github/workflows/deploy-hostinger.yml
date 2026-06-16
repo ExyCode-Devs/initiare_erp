@@ -102,18 +102,18 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.HOSTINGER_SSH_KEY }}
 
-      - name: Add server to known hosts
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          ssh-keyscan -p "$REMOTE_PORT" -H "$REMOTE_HOST" >> ~/.ssh/known_hosts
-
       - name: Ensure remote directory exists
         shell: bash
         run: |
           set -euo pipefail
-          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=30 -o ServerAliveInterval=30 -o ServerAliveCountMax=120)
+          ssh_opts=(
+            -o BatchMode=yes
+            -o ConnectTimeout=30
+            -o ServerAliveInterval=30
+            -o ServerAliveCountMax=120
+            -o StrictHostKeyChecking=no
+            -o UserKnownHostsFile=/dev/null
+          )
 
           for attempt in 1 2 3; do
             if ssh "${ssh_opts[@]}" -p "$REMOTE_PORT" \
@@ -135,7 +135,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=30 -o ServerAliveInterval=30 -o ServerAliveCountMax=120)
+          ssh_opts=(
+            -o BatchMode=yes
+            -o ConnectTimeout=30
+            -o ServerAliveInterval=30
+            -o ServerAliveCountMax=120
+            -o StrictHostKeyChecking=no
+            -o UserKnownHostsFile=/dev/null
+          )
 
           upload_file() {
             local source_path="$1"
@@ -167,7 +174,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=30 -o ServerAliveInterval=30 -o ServerAliveCountMax=120)
+          ssh_opts=(
+            -o BatchMode=yes
+            -o ConnectTimeout=30
+            -o ServerAliveInterval=30
+            -o ServerAliveCountMax=120
+            -o StrictHostKeyChecking=no
+            -o UserKnownHostsFile=/dev/null
+          )
 
           env_file="$(mktemp)"
           remote_script="$(mktemp)"
