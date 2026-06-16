@@ -45,18 +45,6 @@ compose() {
     "$@"
 }
 
-run_with_timeout() {
-  local seconds="$1"
-  shift
-
-  if command -v timeout >/dev/null 2>&1; then
-    timeout "$seconds" "$@"
-    return $?
-  fi
-
-  "$@"
-}
-
 pull_service_image() {
   local service="$1"
   local max_attempts="${2:-3}"
@@ -66,7 +54,17 @@ pull_service_image() {
   while (( attempt <= max_attempts )); do
     echo "Pulling ${service} image, attempt ${attempt}/${max_attempts}"
 
-    if run_with_timeout "$pull_timeout" compose pull "$service"; then
+    if command -v timeout >/dev/null 2>&1; then
+      if timeout "$pull_timeout" docker compose \
+        --project-name "$COMPOSE_PROJECT_NAME" \
+        --project-directory "$APP_DIR" \
+        --env-file .env \
+        -f "$COMPOSE_FILE" \
+        pull "$service"; then
+        echo "Pulled ${service} image successfully"
+        return 0
+      fi
+    elif compose pull "$service"; then
       echo "Pulled ${service} image successfully"
       return 0
     fi
