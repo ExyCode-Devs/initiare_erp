@@ -19,6 +19,23 @@ if ! grep -q '^ACTIVE_ACTIONS_HMAC_SECRET=' .env; then
     'change-this-active-actions-secret-before-production-123456' >> .env
 fi
 
+upsert_env_var() {
+  local key="$1"
+  local value="$2"
+
+  [[ -n "$value" ]] || return 0
+
+  if grep -q "^${key}=" .env; then
+    sed -i "s|^${key}=.*|${key}=${value}|" .env
+  else
+    printf '%s=%s\n' "$key" "$value" >> .env
+  fi
+}
+
+upsert_env_var "WEB_IMAGE" "${WEB_IMAGE:-}"
+upsert_env_var "API_IMAGE" "${API_IMAGE:-}"
+upsert_env_var "IMAGE_TAG" "${IMAGE_TAG:-}"
+
 compose() {
   docker compose \
     --project-name "$COMPOSE_PROJECT_NAME" \
