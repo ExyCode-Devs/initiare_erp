@@ -75,6 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-push
     environment: production
+    timeout-minutes: 180
 
     env:
       REMOTE_HOST: ${{ secrets.HOSTINGER_HOST }}
@@ -96,75 +97,161 @@ jobs:
           test -n "$REMOTE_USER"
           test -n "${{ secrets.HOSTINGER_SSH_KEY }}"
 
-      - name: Ensure remote directory exists
-        uses: appleboy/ssh-action@v1.2.1
-        env:
-          REMOTE_APP_DIR: ${{ env.REMOTE_APP_DIR }}
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          host: ${{ env.REMOTE_HOST }}
-          username: ${{ env.REMOTE_USER }}
-          key: ${{ secrets.HOSTINGER_SSH_KEY }}
-          port: ${{ env.REMOTE_PORT }}
-          envs: REMOTE_APP_DIR
-          timeout: 120s
-          command_timeout: 30s
-          sync: true
-          script: |
-            set -e
-            mkdir -p "$REMOTE_APP_DIR/deploy/hostinger"
+          ssh-private-key: ${{ secrets.HOSTINGER_SSH_KEY }}
+
+      - name: Add server to known hosts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "$REMOTE_PORT" -H "$REMOTE_HOST" >> ~/.ssh/known_hosts
+
+      - name: Ensure remote directory exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=30 -o ServerAliveInterval=30 -o ServerAliveCountMax=120)
+
+          for attempt in 1 2 3; do
+            if ssh "${ssh_opts[@]}" -p "$REMOTE_PORT" \
+              "$REMOTE_USER@$REMOTE_HOST" \
+              "mkdir -p '$REMOTE_APP_DIR/deploy/hostinger'"; then
+              exit 0
+            fi
+
+            if [[ "$attempt" == "3" ]]; then
+              echo "failed to create remote directory after $attempt attempts"
+              exit 1
+            fi
+
+            echo "ssh setup failed, retrying in 20s"
+            sleep 20
+          done
 
       - name: Upload deploy files
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ env.REMOTE_HOST }}
-          username: ${{ env.REMOTE_USER }}
-          key: ${{ secrets.HOSTINGER_SSH_KEY }}
-          port: ${{ env.REMOTE_PORT }}
-          timeout: 120s
-          command_timeout: 60s
-          overwrite: true
-          source: "docker-compose.prod.yml,deploy/hostinger/deploy.sh"
-          target: "${{ env.REMOTE_APP_DIR }}"
-          strip_components: 0
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=30 -o ServerAliveInterval=30 -o ServerAliveCountMax=120)
+
+          upload_file() {
+            local source_path="$1"
+            local target_path="$2"
+            local attempt=1
+
+            while (( attempt <= 3 )); do
+              if scp "${ssh_opts[@]}" -P "$REMOTE_PORT" \
+                "$source_path" \
+                "$REMOTE_USER@$REMOTE_HOST:$target_path"; then
+                return 0
+              fi
+
+              if (( attempt == 3 )); then
+                echo "upload failed for $source_path after $attempt attempts"
+                return 1
+              fi
+
+              echo "upload failed for $source_path, retrying in 20s"
+              sleep 20
+              ((attempt++))
+            done
+          }
+
+          upload_file "docker-compose.prod.yml" "$REMOTE_APP_DIR/docker-compose.prod.yml"
+          upload_file "deploy/hostinger/deploy.sh" "$REMOTE_APP_DIR/deploy/hostinger/deploy.sh"
 
       - name: Deploy on server
-        uses: appleboy/ssh-action@v1.2.1
-        env:
-          REMOTE_APP_DIR: ${{ env.REMOTE_APP_DIR }}
-          WEB_IMAGE: ${{ env.WEB_IMAGE }}
-          API_IMAGE: ${{ env.API_IMAGE }}
-          IMAGE_TAG: ${{ env.IMAGE_TAG }}
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        with:
-          host: ${{ env.REMOTE_HOST }}
-          username: ${{ env.REMOTE_USER }}
-          key: ${{ secrets.HOSTINGER_SSH_KEY }}
-          port: ${{ env.REMOTE_PORT }}
-          envs: REMOTE_APP_DIR,WEB_IMAGE,API_IMAGE,IMAGE_TAG,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN
-          timeout: 120s
-          command_timeout: 60m
-          sync: true
-          script: |
-            set -e
-            cd "$REMOTE_APP_DIR"
-            chmod +x deploy/hostinger/deploy.sh
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=30 -o ServerAliveInterval=30 -o ServerAliveCountMax=120)
 
-            tries=0
-            until [ "$tries" -ge 3 ]; do
-              tries=$((tries + 1))
-              if APP_DIR="$REMOTE_APP_DIR" COMPOSE_FILE="docker-compose.prod.yml" \
-                WEB_IMAGE="$WEB_IMAGE" API_IMAGE="$API_IMAGE" IMAGE_TAG="$IMAGE_TAG" \
-                DOCKERHUB_USERNAME="$DOCKERHUB_USERNAME" DOCKERHUB_TOKEN="$DOCKERHUB_TOKEN" \
-                bash deploy/hostinger/deploy.sh; then
-                exit 0
+          env_file="$(mktemp)"
+          remote_script="$(mktemp)"
+          cleanup() {
+            rm -f "$env_file"
+            rm -f "$remote_script"
+          }
+          trap cleanup EXIT
+
+          {
+            printf 'REMOTE_APP_DIR=%q\n' "$REMOTE_APP_DIR"
+            printf 'WEB_IMAGE=%q\n' "$WEB_IMAGE"
+            printf 'API_IMAGE=%q\n' "$API_IMAGE"
+            printf 'IMAGE_TAG=%q\n' "$IMAGE_TAG"
+            printf 'DOCKERHUB_USERNAME=%q\n' "${{ secrets.DOCKERHUB_USERNAME }}"
+            printf 'DOCKERHUB_TOKEN=%q\n' "${{ secrets.DOCKERHUB_TOKEN }}"
+          } > "$env_file"
+
+          cat > "$remote_script" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          script_dir="$(cd "$(dirname "$0")" && pwd)"
+          source "$script_dir/.deploy.env"
+          cd "$REMOTE_APP_DIR"
+          chmod +x deploy/hostinger/deploy.sh
+
+          tries=0
+          until [ "$tries" -ge 3 ]; do
+            tries=$((tries + 1))
+            if APP_DIR="$REMOTE_APP_DIR" COMPOSE_FILE="docker-compose.prod.yml" \
+              WEB_IMAGE="$WEB_IMAGE" API_IMAGE="$API_IMAGE" IMAGE_TAG="$IMAGE_TAG" \
+              DOCKERHUB_USERNAME="$DOCKERHUB_USERNAME" DOCKERHUB_TOKEN="$DOCKERHUB_TOKEN" \
+              bash deploy/hostinger/deploy.sh; then
+              rm -f "$REMOTE_APP_DIR/.deploy.env" "$REMOTE_APP_DIR/.deploy-run.sh"
+              exit 0
+            fi
+
+            if [ "$tries" -ge 3 ]; then
+              echo "deploy failed after $tries attempts"
+              exit 1
+            fi
+
+            echo "deploy attempt $tries failed, retrying in 20s"
+            sleep 20
+          done
+          EOF
+
+          upload_file() {
+            local source_path="$1"
+            local target_path="$2"
+            local attempt=1
+
+            while (( attempt <= 3 )); do
+              if scp "${ssh_opts[@]}" -P "$REMOTE_PORT" \
+                "$source_path" \
+                "$REMOTE_USER@$REMOTE_HOST:$target_path"; then
+                return 0
               fi
 
-              if [ "$tries" -ge 3 ]; then
-                echo "deploy failed after $tries attempts"
-                exit 1
+              if (( attempt == 3 )); then
+                echo "upload failed for $source_path after $attempt attempts"
+                return 1
               fi
 
-              echo "deploy attempt $tries failed, retrying in 20s"
+              echo "upload failed for $source_path, retrying in 20s"
               sleep 20
+              ((attempt++))
             done
+          }
+
+          upload_file "$env_file" "$REMOTE_APP_DIR/.deploy.env"
+          upload_file "$remote_script" "$REMOTE_APP_DIR/.deploy-run.sh"
+
+          for attempt in 1 2 3; do
+            if ssh "${ssh_opts[@]}" -p "$REMOTE_PORT" \
+              "$REMOTE_USER@$REMOTE_HOST" "bash '$REMOTE_APP_DIR/.deploy-run.sh'"; then
+              exit 0
+            fi
+
+            if [[ "$attempt" == "3" ]]; then
+              echo "remote deploy connection failed after $attempt attempts"
+              exit 1
+            fi
+
+            echo "remote deploy connection failed, retrying in 20s"
+            sleep 20
+          done
