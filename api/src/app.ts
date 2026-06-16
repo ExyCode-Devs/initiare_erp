@@ -118,6 +118,14 @@ export function buildApp() {
   app.register(monitoringPlugin);
 
   app.get("/api/health", async () => {
+    return {
+      status: "ok",
+      service: "initiare_erp-api",
+      timestamp: new Date().toISOString()
+    };
+  });
+
+  app.get("/api/health/db", async () => {
     await prisma.$queryRaw`SELECT 1`;
 
     return {

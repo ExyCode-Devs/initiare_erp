@@ -52,6 +52,10 @@ const automationSettingsUpdateSchema = z.object({
   batchIntervalMinutes: z.coerce.number().int().min(1).max(1440)
 });
 
+const operationsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).default(200)
+});
+
 function formatMoney(value: number) {
   return `R$ ${value.toLocaleString("pt-BR")}`;
 }
@@ -68,18 +72,49 @@ const dataRoutes: FastifyPluginAsync = async (app) => {
 
     protectedApp.get("/operations", async (request) => {
       const companyId = request.user.companyId;
-      const items = await prisma.operation.findMany({
-        where: { companyId },
-        include: { supplier: true },
-        orderBy: { dueDate: "desc" }
-      });
+      const { limit } = operationsQuerySchema.parse(request.query);
+      const [items, total, processedByAi, inReview, exceptions] = await Promise.all([
+        prisma.operation.findMany({
+          where: { companyId },
+          orderBy: { dueDate: "desc" },
+          take: limit,
+          select: {
+            id: true,
+            reference: true,
+            amount: true,
+            dueDate: true,
+            category: true,
+            status: true,
+            source: true,
+            confidence: true,
+            assignee: true,
+            supplier: {
+              select: {
+                name: true
+              }
+            }
+          }
+        }),
+        prisma.operation.count({
+          where: { companyId }
+        }),
+        prisma.operation.count({
+          where: { companyId, assignee: "IA" }
+        }),
+        prisma.operation.count({
+          where: { companyId, status: "EM_REVISAO" }
+        }),
+        prisma.operation.count({
+          where: { companyId, status: "EXCECAO" }
+        })
+      ]);
 
       return {
         stats: {
-          total: items.length,
-          processedByAi: items.filter((item) => item.assignee === "IA").length,
-          inReview: items.filter((item) => item.status === "EM_REVISAO").length,
-          exceptions: items.filter((item) => item.status === "EXCECAO").length
+          total,
+          processedByAi,
+          inReview,
+          exceptions
         },
         items: items.map((item) => ({
           id: item.id,

@@ -11,7 +11,7 @@ const automationRoutes: FastifyPluginAsync = async (app) => {
       company,
       mailboxes,
       emails,
-      drafts,
+      draftVolume,
       jobRuns,
       totalEmails,
       processed,
@@ -39,14 +39,39 @@ const automationRoutes: FastifyPluginAsync = async (app) => {
         where: { companyId },
         orderBy: { receivedAt: "desc" },
         take: 10,
+        select: {
+          id: true,
+          sender: true,
+          subject: true,
+          status: true,
+          receivedAt: true,
+        },
       }),
-      prisma.financialDraft.findMany({
-        where: { companyId },
+      prisma.financialDraft.aggregate({
+        where: {
+          companyId,
+          status: {
+            not: "REJEITADO",
+          },
+        },
+        _sum: {
+          amount: true,
+        },
       }),
       prisma.processingJobRun.findMany({
         where: { companyId },
         orderBy: { startedAt: "desc" },
         take: 5,
+        select: {
+          id: true,
+          runType: true,
+          status: true,
+          fetchedCount: true,
+          processedCount: true,
+          errorCount: true,
+          startedAt: true,
+          finishedAt: true,
+        },
       }),
       prisma.inboundEmail.count({
         where: { companyId },
@@ -91,9 +116,7 @@ const automationRoutes: FastifyPluginAsync = async (app) => {
       }),
     ]);
 
-    const volume = drafts
-      .filter((item) => item.status !== "REJEITADO")
-      .reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+    const volume = Number(draftVolume._sum.amount ?? 0);
     const settings = normalizeAutomationSettings(company.automationSettings);
     const activeMailboxes = mailboxes.filter((item) => item.active);
     const latestSuccessfulSync = activeMailboxes
