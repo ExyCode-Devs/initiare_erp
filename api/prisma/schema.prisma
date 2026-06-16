@@ -231,7 +231,7 @@ model Company {
   mailboxAccounts           MailboxAccount[]
   inboundEmails             InboundEmail[]
   emailAttachments          EmailAttachment[]
-  n8nExtractionRuns         N8nExtractionRun[]
+  activepiecesExtractionRuns ActivepiecesExtractionRun[]
   financialDrafts           FinancialDraft[]
   financialDraftReviews     FinancialDraftReview[]
   processingJobRuns         ProcessingJobRun[]
@@ -357,7 +357,7 @@ model InboundEmail {
   legalEntity       LegalEntity?      @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
   mailbox           MailboxAccount    @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
   attachments       EmailAttachment[]
-  extractionRuns    N8nExtractionRun[]
+  extractionRuns    ActivepiecesExtractionRun[]
   financialDrafts   FinancialDraft[]
 
   @@index([companyId, status, receivedAt])
@@ -387,9 +387,9 @@ model EmailAttachment {
   @@index([emailId])
 }
 
-model N8nExtractionRun {
+model ActivepiecesExtractionRun {
   id               String              @id @default(cuid())
-  provider         String              @default("n8n")
+  provider         String              @default("activepieces")
   workflowId       String?
   requestPayload   Json
   rawResponse      String?             @db.Text
@@ -407,6 +407,7 @@ model N8nExtractionRun {
 
   @@index([companyId, status, startedAt])
   @@index([emailId])
+  @@map("N8nExtractionRun")
 }
 
 model FinancialDraft {
@@ -447,7 +448,7 @@ model FinancialDraft {
   company              Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   legalEntity          LegalEntity?       @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
   sourceEmail          InboundEmail?      @relation(fields: [sourceEmailId], references: [id], onDelete: Cascade)
-  extractionRun        N8nExtractionRun?  @relation(fields: [extractionRunId], references: [id], onDelete: SetNull)
+  extractionRun        ActivepiecesExtractionRun?  @relation(fields: [extractionRunId], references: [id], onDelete: SetNull)
   sourceEvent          AiEventSource?     @relation(fields: [sourceEventId], references: [id], onDelete: SetNull)
   aiRun                AiGatewayRun?      @relation(fields: [aiRunId], references: [id], onDelete: SetNull)
   reviews              FinancialDraftReview[]

@@ -71,7 +71,7 @@ export async function provisionDemoData(prisma: PrismaClient) {
   await prisma.financialDraft.deleteMany({ where: { companyId: company.id } });
   await prisma.aiGatewayRun.deleteMany({ where: { companyId: company.id } });
   await prisma.aiEventSource.deleteMany({ where: { companyId: company.id } });
-  await prisma.n8nExtractionRun.deleteMany({ where: { companyId: company.id } });
+  await prisma.activepiecesExtractionRun.deleteMany({ where: { companyId: company.id } });
   await prisma.emailAttachment.deleteMany({ where: { companyId: company.id } });
   await prisma.inboundEmail.deleteMany({ where: { companyId: company.id } });
   await prisma.processingJobRun.deleteMany({ where: { companyId: company.id } });
@@ -491,11 +491,11 @@ export async function provisionDemoData(prisma: PrismaClient) {
     },
   });
 
-  const extractionRun = await prisma.n8nExtractionRun.create({
+  const extractionRun = await prisma.activepiecesExtractionRun.create({
     data: {
       companyId: company.id,
       emailId: inboundEmail.id,
-      provider: "n8n",
+      provider: "activepieces",
       workflowId: "wf-1",
       requestPayload: { emailId: inboundEmail.id },
       rawResponse: "{\"normalized\":true}",

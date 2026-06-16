@@ -309,7 +309,7 @@ function createMockState() {
           extractionRuns: [
             {
               id: "extract-1",
-              provider: "n8n",
+              provider: "activepieces",
               workflowId: "wf-1",
               status: "SUCESSO",
               errorMessage: null,
@@ -644,7 +644,7 @@ function createMockState() {
         extractionRuns: [
           {
             id: "extract-1",
-            provider: "n8n",
+            provider: "activepieces",
             workflowId: "wf-1",
             status: "SUCESSO",
             durationMs: 380,

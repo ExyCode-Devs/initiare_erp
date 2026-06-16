@@ -10,7 +10,7 @@ import { env } from "../config/env.js";
 import { normalizeAutomationSettings } from "./automation-settings.js";
 import { prisma } from "./prisma.js";
 import { computeConfidence } from "./confidence.js";
-import { invokeN8nExtraction } from "./n8n-provider.js";
+import { dispatchActivepiecesExtraction, type ActivepiecesExtractionResult } from "./activepieces-provider.js";
 import { decryptMailboxSecret } from "./mailbox-crypto.js";
 import { toNullablePrismaJson, toPrismaJson } from "./prisma-json.js";
 import { writeAuditLog } from "./audit.js";
@@ -88,7 +88,7 @@ async function createDraftFromExtraction(params: {
   extractionRunId: string;
   sender: string;
   attachments: Array<{ mimeType: string; extractedText: string | null }>;
-  extraction: Awaited<ReturnType<typeof invokeN8nExtraction>>["parsed"];
+  extraction: ActivepiecesExtractionResult;
 }) {
   const { knownSuppliers, knownClients } = await buildContext(params.companyId);
   const senderKnown = knownSuppliers
@@ -134,6 +134,98 @@ async function createDraftFromExtraction(params: {
       confidenceScore: confidence.score,
       confidenceBand: confidence.band,
       status: DraftStatus.PENDENTE_REVISAO
+    }
+  });
+}
+
+async function markExtractionRunSuccess(input: {
+  extractionRunId: string;
+  emailId: string;
+  companyId: string;
+  sender: string;
+  attachments: Array<{ mimeType: string; extractedText: string | null }>;
+  extraction: ActivepiecesExtractionResult;
+  rawResponse: string | null;
+  workflowId?: string | null;
+  durationMs?: number | null;
+}) {
+  const draft = await createDraftFromExtraction({
+    companyId: input.companyId,
+    emailId: input.emailId,
+    extractionRunId: input.extractionRunId,
+    sender: input.sender,
+    attachments: input.attachments,
+    extraction: input.extraction
+  });
+
+  await prisma.activepiecesExtractionRun.update({
+    where: { id: input.extractionRunId },
+    data: {
+      status: ExtractionRunStatus.SUCESSO,
+      rawResponse: input.rawResponse,
+      parsedResponse: toPrismaJson(input.extraction),
+      workflowId:
+        input.workflowId ??
+        (input.extraction.providerMeta && typeof input.extraction.providerMeta.workflowId === "string"
+          ? input.extraction.providerMeta.workflowId
+          : null),
+      durationMs: input.durationMs ?? null,
+      completedAt: new Date()
+    }
+  });
+
+  await prisma.inboundEmail.update({
+    where: { id: input.emailId },
+    data: {
+      status: InboxStatus.AGUARDANDO_VALIDACAO
+    }
+  });
+
+  await writeAuditLog({
+    companyId: input.companyId,
+    action: "inbox.email.processed",
+    resource: "inbound-email",
+    details: {
+      emailId: input.emailId,
+      draftId: draft.id,
+      extractionRunId: input.extractionRunId
+    }
+  });
+
+  return draft;
+}
+
+async function markExtractionRunFailure(input: {
+  extractionRunId: string;
+  emailId: string;
+  companyId: string;
+  errorMessage: string;
+}) {
+  await prisma.activepiecesExtractionRun.update({
+    where: { id: input.extractionRunId },
+    data: {
+      status: ExtractionRunStatus.ERRO,
+      errorMessage: input.errorMessage,
+      completedAt: new Date()
+    }
+  });
+
+  await prisma.inboundEmail.update({
+    where: { id: input.emailId },
+    data: {
+      status: InboxStatus.ERRO,
+      processingError: input.errorMessage
+    }
+  });
+
+  await writeAuditLog({
+    companyId: input.companyId,
+    action: "inbox.email.failed",
+    resource: "inbound-email",
+    details: {
+      emailId: input.emailId,
+      extractionRunId: input.extractionRunId,
+      error: input.errorMessage
     }
   });
 }
@@ -257,95 +349,174 @@ async function processStoredEmail(input: {
     context
   };
 
-  const extractionRun = await prisma.n8nExtractionRun.create({
+  const extractionRun = await prisma.activepiecesExtractionRun.create({
     data: {
       companyId: input.companyId,
       emailId: email.id,
+      provider: "activepieces",
       requestPayload: toPrismaJson(requestPayload),
       status: ExtractionRunStatus.PENDENTE
     }
   });
 
   try {
-    const extraction = await invokeN8nExtraction(requestPayload);
+    const extraction = await dispatchActivepiecesExtraction({
+      extractionRunId: extractionRun.id,
+      payload: requestPayload
+    });
 
-    await prisma.n8nExtractionRun.update({
+    if (extraction.mode === "sync") {
+      await markExtractionRunSuccess({
+        extractionRunId: extractionRun.id,
+        emailId: email.id,
+        companyId: input.companyId,
+        sender: input.sender,
+        attachments: storedAttachments.map((attachment) => ({
+          mimeType: attachment.mimeType,
+          extractedText: attachment.extractedText
+        })),
+        extraction: extraction.parsed,
+        rawResponse: extraction.rawText,
+        durationMs: extraction.durationMs
+      });
+      return;
+    }
+
+    await prisma.activepiecesExtractionRun.update({
       where: { id: extractionRun.id },
       data: {
-        status: ExtractionRunStatus.SUCESSO,
+        workflowId: extraction.workflowId,
         rawResponse: extraction.rawText,
-        parsedResponse: toPrismaJson(extraction.parsed),
-        workflowId:
-          extraction.parsed.providerMeta && typeof extraction.parsed.providerMeta.workflowId === "string"
-            ? extraction.parsed.providerMeta.workflowId
-            : null,
-        durationMs: extraction.durationMs,
-        completedAt: new Date()
-      }
-    });
-
-    const draft = await createDraftFromExtraction({
-      companyId: input.companyId,
-      emailId: email.id,
-      extractionRunId: extractionRun.id,
-      sender: input.sender,
-      attachments: storedAttachments.map((attachment) => ({
-        mimeType: attachment.mimeType,
-        extractedText: attachment.extractedText
-      })),
-      extraction: extraction.parsed
-    });
-
-    await prisma.inboundEmail.update({
-      where: { id: email.id },
-      data: {
-        status: InboxStatus.AGUARDANDO_VALIDACAO
+        durationMs: extraction.durationMs
       }
     });
 
     await writeAuditLog({
       companyId: input.companyId,
-      action: "inbox.email.processed",
+      action: "inbox.email.queued",
       resource: "inbound-email",
       details: {
         emailId: email.id,
-        draftId: draft.id,
-        extractionRunId: extractionRun.id
+        extractionRunId: extractionRun.id,
+        workflowId: extraction.workflowId
       }
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown extraction failure";
 
-    await prisma.n8nExtractionRun.update({
-      where: { id: extractionRun.id },
-      data: {
-        status: ExtractionRunStatus.ERRO,
-        errorMessage: message,
-        completedAt: new Date()
-      }
-    });
-
-    await prisma.inboundEmail.update({
-      where: { id: email.id },
-      data: {
-        status: InboxStatus.ERRO,
-        processingError: message
-      }
-    });
-
-    await writeAuditLog({
+    await markExtractionRunFailure({
+      extractionRunId: extractionRun.id,
+      emailId: email.id,
       companyId: input.companyId,
-      action: "inbox.email.failed",
-      resource: "inbound-email",
-      details: {
-        emailId: email.id,
-        extractionRunId: extractionRun.id,
-        error: message
-      }
+      errorMessage: message
     });
 
     throw error;
   }
+}
+
+export async function completeExtractionRunFromCallback(
+  payload:
+    | {
+        extractionRunId: string;
+        status: "SUCESSO";
+        workflowId?: string | null;
+        rawResponse?: string | null;
+        durationMs?: number | null;
+        providerMeta?: Record<string, unknown> | null;
+        parsed: ActivepiecesExtractionResult;
+      }
+    | {
+        extractionRunId: string;
+        status: "ERRO";
+        workflowId?: string | null;
+        rawResponse?: string | null;
+        durationMs?: number | null;
+        errorMessage: string;
+      }
+) {
+  const run = await prisma.activepiecesExtractionRun.findUniqueOrThrow({
+    where: { id: payload.extractionRunId },
+    include: {
+      email: {
+        include: {
+          attachments: {
+            select: {
+              mimeType: true,
+              extractedText: true
+            }
+          }
+        }
+      },
+      financialDraft: {
+        select: { id: true }
+      }
+    }
+  });
+
+  if (run.status !== ExtractionRunStatus.PENDENTE) {
+    return {
+      mode: "duplicate" as const,
+      extractionRunId: run.id,
+      emailId: run.emailId,
+      draftId: run.financialDraft?.id ?? null
+    };
+  }
+
+  if (payload.status === "ERRO") {
+    await prisma.activepiecesExtractionRun.update({
+      where: { id: run.id },
+      data: {
+        workflowId: payload.workflowId ?? run.workflowId,
+        rawResponse: payload.rawResponse ?? run.rawResponse,
+        durationMs: payload.durationMs ?? run.durationMs
+      }
+    });
+
+    await markExtractionRunFailure({
+      extractionRunId: run.id,
+      emailId: run.emailId,
+      companyId: run.companyId,
+      errorMessage: payload.errorMessage
+    });
+
+    return {
+      mode: "failed" as const,
+      extractionRunId: run.id,
+      emailId: run.emailId,
+      draftId: null
+    };
+  }
+
+  const extraction =
+    payload.providerMeta == null
+      ? payload.parsed
+      : {
+          ...payload.parsed,
+          providerMeta: {
+            ...(payload.parsed.providerMeta ?? {}),
+            ...payload.providerMeta
+          }
+        };
+
+  const draft = await markExtractionRunSuccess({
+    extractionRunId: run.id,
+    emailId: run.emailId,
+    companyId: run.companyId,
+    sender: run.email.sender,
+    attachments: run.email.attachments,
+    extraction,
+    rawResponse: payload.rawResponse ?? run.rawResponse,
+    workflowId: payload.workflowId ?? run.workflowId,
+    durationMs: payload.durationMs ?? run.durationMs
+  });
+
+  return {
+    mode: "completed" as const,
+    extractionRunId: run.id,
+    emailId: run.emailId,
+    draftId: draft.id
+  };
 }
 
 export async function testMailboxConnection(mailboxId: string, companyId: string) {

@@ -17,6 +17,7 @@ import dashboardRoutes from "./routes/dashboard.js";
 import dataRoutes from "./routes/data.js";
 import financialDraftRoutes from "./routes/financial-drafts.js";
 import inboxRoutes from "./routes/inbox.js";
+import inboxWebhookRoutes from "./routes/inbox-webhooks.js";
 import legalEntityRoutes from "./routes/legal-entities.js";
 import mailboxRoutes from "./routes/mailboxes.js";
 import monitoringRoutes from "./routes/monitoring.js";
@@ -127,6 +128,7 @@ export function buildApp() {
 
   app.register(authRoutes, { prefix: "/api/auth" });
   app.register(aiEventRoutes, { prefix: "/api" });
+  app.register(inboxWebhookRoutes, { prefix: "/api" });
   app.register(dashboardRoutes, { prefix: "/api" });
   app.register(dataRoutes, { prefix: "/api" });
   app.register(legalEntityRoutes, { prefix: "/api" });

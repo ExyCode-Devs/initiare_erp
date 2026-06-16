@@ -1,7 +1,6 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { env } from "../config/env.js";
+import { isFreshActiveTimestamp, verifyActiveSignature } from "../lib/active-signature.js";
 import { ingestExternalNormalizedDraft } from "../lib/ai-draft-service.js";
 import { resolveCompanyFromDraftRoute } from "../lib/legal-entities.js";
 
@@ -47,30 +46,6 @@ const payloadSchema = z.object({
   })
 });
 
-function verifySignature(input: { rawBody: string; signature: string; timestamp: string }) {
-  const expected = createHmac("sha256", env.ACTIVE_ACTIONS_HMAC_SECRET)
-    .update(`${input.timestamp}.${input.rawBody}`)
-    .digest("hex");
-
-  const left = Buffer.from(input.signature, "hex");
-  const right = Buffer.from(expected, "hex");
-
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  return timingSafeEqual(left, right);
-}
-
-function isFreshTimestamp(timestamp: string) {
-  const receivedAt = Number(new Date(timestamp));
-  if (Number.isNaN(receivedAt)) {
-    return false;
-  }
-
-  return Math.abs(Date.now() - receivedAt) <= env.ACTIVE_ACTIONS_MAX_SKEW_MS;
-}
-
 const aiEventRoutes: FastifyPluginAsync = async (app) => {
   app.post("/ai/events/financial-drafts", async (request, reply) => {
     const timestamp = typeof request.headers["x-initi-timestamp"] === "string" ? request.headers["x-initi-timestamp"] : null;
@@ -82,7 +57,7 @@ const aiEventRoutes: FastifyPluginAsync = async (app) => {
           ? JSON.stringify(request.body)
           : null;
 
-    if (!timestamp || !signature || !rawBody || !isFreshTimestamp(timestamp) || !verifySignature({ rawBody, signature, timestamp })) {
+    if (!timestamp || !signature || !rawBody || !isFreshActiveTimestamp(timestamp) || !verifyActiveSignature({ rawBody, signature, timestamp })) {
       reply.code(401);
       return { message: "Invalid Active Actions signature" };
     }

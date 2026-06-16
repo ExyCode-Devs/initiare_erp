@@ -59,7 +59,7 @@
 - `MailboxAccount`
 - `InboundEmail`
 - `EmailAttachment`
-- `N8nExtractionRun`
+- `ActivepiecesExtractionRun` mapped to DB table `N8nExtractionRun`
 - `FinancialDraft`
 - `FinancialDraftReview`
 - `ProcessingJobRun`
@@ -93,9 +93,9 @@
 
 ## Variaveis novas
 
-- `N8N_EXTRACTION_WEBHOOK_URL`
-- `N8N_EXTRACTION_BEARER_TOKEN`
-- `N8N_TIMEOUT_MS`
+- `ACTIVEPIECES_EXTRACTION_WEBHOOK_URL`
+- `ACTIVEPIECES_EXTRACTION_BEARER_TOKEN`
+- `ACTIVEPIECES_TIMEOUT_MS`
 - `MAILBOX_SECRET_KEY`
 - `WORKER_POLL_INTERVAL_MS`
 - `WORKER_BATCH_SIZE`

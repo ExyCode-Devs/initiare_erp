@@ -14,6 +14,8 @@ const emptyToUndefined = (value: unknown) => {
 
 const optionalString = () => z.preprocess(emptyToUndefined, z.string().min(1).optional());
 const optionalEmail = () => z.preprocess(emptyToUndefined, z.email().optional());
+const optionalEnum = <T extends readonly [string, ...string[]]>(values: T) =>
+  z.preprocess(emptyToUndefined, z.enum(values).optional());
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -25,8 +27,20 @@ const envSchema = z.object({
   APP_ORIGIN: z.string().default("http://localhost:3000"),
   ACTIVE_ACTIONS_HMAC_SECRET: z.string().min(32, "ACTIVE_ACTIONS_HMAC_SECRET must be at least 32 chars"),
   ACTIVE_ACTIONS_MAX_SKEW_MS: z.coerce.number().int().positive().default(300000),
+  API_PUBLIC_BASE_URL: optionalString(),
+  ACTIVEPIECES_EXTRACTION_WEBHOOK_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
+  ACTIVEPIECES_EXTRACTION_DELIVERY_MODE: optionalEnum(["sync", "async"]),
+  ACTIVEPIECES_EXTRACTION_AUTH_MODE: optionalEnum(["bearer", "hmac", "none"]),
+  ACTIVEPIECES_EXTRACTION_BEARER_TOKEN: optionalString(),
+  ACTIVEPIECES_EXTRACTION_HMAC_SECRET: optionalString(),
+  ACTIVEPIECES_EXTRACTION_HMAC_HEADER: optionalString(),
+  ACTIVEPIECES_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
   N8N_EXTRACTION_WEBHOOK_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
+  N8N_EXTRACTION_DELIVERY_MODE: optionalEnum(["sync", "async"]).default("sync"),
+  N8N_EXTRACTION_AUTH_MODE: optionalEnum(["bearer", "hmac", "none"]),
   N8N_EXTRACTION_BEARER_TOKEN: optionalString(),
+  N8N_EXTRACTION_HMAC_SECRET: optionalString(),
+  N8N_EXTRACTION_HMAC_HEADER: z.string().default("x-initi-signature"),
   N8N_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
   MAILBOX_SECRET_KEY: z.preprocess(emptyToUndefined, z.string().min(32).optional()),
   OMIE_CONNECTION_CIPHER_KEY: z.preprocess(emptyToUndefined, z.string().min(32).optional()),

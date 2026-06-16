@@ -96,7 +96,7 @@ export async function resetLocalData(prisma: PrismaClient) {
   await prisma.financialDraft.deleteMany();
   await prisma.aiGatewayRun.deleteMany();
   await prisma.aiEventSource.deleteMany();
-  await prisma.n8nExtractionRun.deleteMany();
+  await prisma.activepiecesExtractionRun.deleteMany();
   await prisma.emailAttachment.deleteMany();
   await prisma.inboundEmail.deleteMany();
   await prisma.processingJobRun.deleteMany();

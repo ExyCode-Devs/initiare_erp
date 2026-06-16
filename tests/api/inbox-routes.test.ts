@@ -182,7 +182,7 @@ describe("inbox routes", () => {
       extractionRuns: [
         {
           id: "run-1",
-          provider: "n8n",
+          provider: "activepieces",
           workflowId: "wf-1",
           status: "SUCESSO",
           durationMs: 500,
