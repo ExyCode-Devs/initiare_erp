@@ -60,7 +60,7 @@ run_with_timeout() {
 pull_service_image() {
   local service="$1"
   local max_attempts="${2:-3}"
-  local pull_timeout="${3:-900s}"
+  local pull_timeout="${3:-1800s}"
   local attempt=1
 
   while (( attempt <= max_attempts )); do
