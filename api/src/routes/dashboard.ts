@@ -12,24 +12,52 @@ const dashboardRoutes: FastifyPluginAsync = async (app) => {
 
     const [
       payableItems,
-      receivableItems,
+      payableTotal,
+      dueIn7DaysCount,
       operations,
-      exceptions,
+      openExceptions,
       aiLogs,
       cashflow,
       expensesByCategory,
       reconciliationDaily,
       omieSyncs,
       asaasChargeSyncs,
-      asaasWebhookEvents
+      asaasWebhookEvents,
+      totalConnections,
+      healthyConnections
     ] = await Promise.all([
-      prisma.accountPayable.findMany({ where: { companyId } }),
-      prisma.accountReceivable.findMany({ where: { companyId } }),
+      prisma.accountPayable.findMany({
+        where: { companyId },
+        select: { amount: true, dueDate: true, status: true }
+      }),
+      prisma.accountPayable.aggregate({
+        where: { companyId },
+        _sum: { amount: true }
+      }),
+      prisma.accountPayable.count({
+        where: {
+          companyId,
+          dueDate: {
+            gte: new Date(),
+            lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+          }
+        }
+      }),
       prisma.operation.findMany({ where: { companyId }, orderBy: { dueDate: "desc" }, take: 42 }),
-      prisma.exceptionItem.findMany({ where: { companyId }, orderBy: { updatedAt: "desc" } }),
-      prisma.aiLog.findMany({ where: { companyId }, orderBy: { occurredAt: "desc" }, take: 8 }),
+      prisma.exceptionItem.count({ where: { companyId, status: "OPEN" } }),
+      prisma.aiLog.findMany({
+        where: { companyId },
+        orderBy: { occurredAt: "desc" },
+        take: 8,
+        select: {
+          occurredAt: true,
+          status: true,
+          action: true,
+          confidence: true
+        }
+      }),
       prisma.cashflowPoint.findMany({ where: { companyId }, orderBy: { monthKey: "asc" } }),
-      prisma.expenseCategory.findMany({ where: { companyId } }),
+      prisma.expenseCategory.findMany({ where: { companyId }, select: { name: true, value: true } }),
       prisma.dailyReconciliationPoint.findMany({ where: { companyId }, orderBy: { day: "asc" } }),
       prisma.erpSyncRecord.findMany({
         where: {
@@ -61,27 +89,23 @@ const dashboardRoutes: FastifyPluginAsync = async (app) => {
           createdAt: "desc"
         },
         take: 20
+      }),
+      prisma.erpConnection.count({ where: { companyId, enabled: true } }),
+      prisma.erpConnection.count({
+        where: {
+          companyId,
+          enabled: true,
+          lastHealthcheckStatus: "HEALTHY"
+        }
       })
     ]);
 
-    const totalPayables = payableItems.reduce((sum, item) => sum + Number(item.amount), 0);
-    const dueIn7Days = payableItems.filter((item) => {
-      const diff = item.dueDate.getTime() - Date.now();
-      return diff >= 0 && diff <= 7 * 24 * 60 * 60 * 1000;
-    });
+    const totalPayables = Number(payableTotal._sum.amount ?? 0);
     const autoProcessedValue = operations
       .filter((item) => item.assignee === "IA")
       .reduce((sum, item) => sum + Number(item.amount), 0);
     const reconciledOperations = operations.filter((item) => item.status === "CONCILIADO").length;
-    const exceptionCount = exceptions.filter((item) => item.status === "OPEN").length;
-    const totalConnections = await prisma.erpConnection.count({ where: { companyId, enabled: true } });
-    const healthyConnections = await prisma.erpConnection.count({
-      where: {
-        companyId,
-        enabled: true,
-        lastHealthcheckStatus: "HEALTHY"
-      }
-    });
+    const exceptionCount = openExceptions;
     const omieSuccess = omieSyncs.filter((item) => item.status === ErpSyncStatus.SUCCESS).length;
     const omieError = omieSyncs.filter((item) => item.status === ErpSyncStatus.ERROR).length;
     const omieBlocked = omieSyncs.filter((item) => item.status === ErpSyncStatus.BLOCKED).length;
@@ -120,7 +144,7 @@ const dashboardRoutes: FastifyPluginAsync = async (app) => {
           : 0,
         processedByAiAmount: currency(autoProcessedValue),
         openExceptions: exceptionCount,
-        scheduledPayments: dueIn7Days.length
+        scheduledPayments: dueIn7DaysCount
       },
       cashflow: cashflow.map((item) => ({
         month: item.month,
