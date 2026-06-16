@@ -45,6 +45,43 @@ compose() {
     "$@"
 }
 
+run_with_timeout() {
+  local seconds="$1"
+  shift
+
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$seconds" "$@"
+    return $?
+  fi
+
+  "$@"
+}
+
+pull_service_image() {
+  local service="$1"
+  local max_attempts="${2:-3}"
+  local pull_timeout="${3:-900s}"
+  local attempt=1
+
+  while (( attempt <= max_attempts )); do
+    echo "Pulling ${service} image, attempt ${attempt}/${max_attempts}"
+
+    if run_with_timeout "$pull_timeout" compose pull "$service"; then
+      echo "Pulled ${service} image successfully"
+      return 0
+    fi
+
+    if (( attempt == max_attempts )); then
+      echo "Failed to pull ${service} image after ${max_attempts} attempts"
+      return 1
+    fi
+
+    echo "Pull ${service} failed, waiting 20s before retry"
+    sleep 20
+    ((attempt++))
+  done
+}
+
 TRAEFIK_NETWORK="$(
   grep -E '^TRAEFIK_NETWORK=' .env 2>/dev/null | tail -n 1 | cut -d '=' -f 2- | tr -d '\r'
 )"
@@ -56,7 +93,8 @@ if [[ -n "${DOCKERHUB_USERNAME:-}" && -n "${DOCKERHUB_TOKEN:-}" ]]; then
   printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
 fi
 
-compose pull web api
+pull_service_image api
+pull_service_image web
 compose up -d postgres
 
 postgres_container="$(compose ps -q postgres)"
