@@ -217,39 +217,39 @@ export function getDraftApprovalBlockers(draft: DraftForReview): WorkflowBlocker
   const evidence = evidenceList(draft.evidence);
 
   if (!draft.partyName.trim()) {
-    blockers.push({ code: "missing_party_name", message: "Party name is required before approval." });
+    blockers.push({ code: "missing_party_name", message: "Nome da parte e obrigatorio antes da aprovacao." });
   }
 
   if (draft.amount == null || Number(draft.amount) <= 0) {
-    blockers.push({ code: "missing_amount", message: "Amount is required before approval." });
+    blockers.push({ code: "missing_amount", message: "Valor e obrigatorio antes da aprovacao." });
   }
 
   if (!draft.dueDate) {
-    blockers.push({ code: "missing_due_date", message: "Due date is required before approval." });
+    blockers.push({ code: "missing_due_date", message: "Vencimento e obrigatorio antes da aprovacao." });
   }
 
   if (!draft.description.trim()) {
-    blockers.push({ code: "missing_description", message: "Description is required before approval." });
+    blockers.push({ code: "missing_description", message: "Descricao e obrigatoria antes da aprovacao." });
   }
 
   if (draft.direction === "CONTA_PAGAR" && !draft.finalCategory && !draft.suggestedCategory) {
-    blockers.push({ code: "missing_category", message: "Category or classification placeholder is required for payable approval." });
+    blockers.push({ code: "missing_category", message: "Categoria ou classificacao e obrigatoria para contas a pagar." });
   }
 
   if (evidence.length === 0) {
-    blockers.push({ code: "missing_evidence", message: "Source evidence is required before approval." });
+    blockers.push({ code: "missing_evidence", message: "Evidencia da fonte e obrigatoria antes da aprovacao." });
   }
 
   if (draft.routingStatus !== DraftRoutingStatus.ROUTED || !draft.legalEntityId) {
-    blockers.push({ code: "route_unresolved", message: "Routing must be resolved before approval." });
+    blockers.push({ code: "route_unresolved", message: "Roteamento deve ser resolvido antes da aprovacao." });
   }
 
   if (normalizeText(draft.routingReason).includes("ambiguous")) {
-    blockers.push({ code: "route_ambiguity", message: "Ambiguous route must be manually resolved before approval." });
+    blockers.push({ code: "route_ambiguity", message: "Roteamento ambiguo deve ser resolvido manualmente antes da aprovacao." });
   }
 
   if (workflow.reviewState === "duplicated" || workflow.duplicateOfId) {
-    blockers.push({ code: "duplicate_marked", message: "Duplicate entries cannot be approved until duplicate mark is undone." });
+    blockers.push({ code: "duplicate_marked", message: "Duplicatas nao podem ser aprovadas ate desfazer a marcacao de duplicado." });
   }
 
   return blockers;

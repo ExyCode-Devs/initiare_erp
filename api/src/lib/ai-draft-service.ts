@@ -92,7 +92,7 @@ function confidenceBandFromScore(value: number) {
 }
 
 function buildSourceLabel(originType: AiEventOriginType) {
-  return originType === "ACTIVE_ACTIONS" ? "Active Actions" : "Internal AI";
+  return originType === "ACTIVE_ACTIONS" ? "Ações ativas" : "IA interna";
 }
 
 async function createFailureException(input: {
@@ -107,20 +107,20 @@ async function createFailureException(input: {
     data: {
       companyId: input.companyId,
       code,
-      title: `AI failure on ${input.failureContext.actionLabel} for ${input.failureContext.entityLabel}`,
+      title: `Falha de IA em ${input.failureContext.actionLabel} para ${input.failureContext.entityLabel}`,
       description: input.errorMessage,
-      suggestion: "Review payload, retry AI generation, or complete draft manually.",
+      suggestion: "Revise o payload, tente gerar novamente com IA ou complete o draft manualmente.",
       confidence: 0,
       severity: "ALTA",
       timeLabel: "agora",
       timeline: toPrismaJson([
         {
           t: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-          text: `Internal AI call failed for ${input.failureContext.entityLabel} ${input.failureContext.entityId}.`
+          text: `Chamada interna de IA falhou para ${input.failureContext.entityLabel} ${input.failureContext.entityId}.`
         },
         {
           t: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-          text: input.source.subject ?? input.source.summary ?? "No source summary available."
+          text: input.source.subject ?? input.source.summary ?? "Nenhum resumo da fonte disponível."
         }
       ])
     }
@@ -300,7 +300,7 @@ export async function runInternalDraftGeneration(input: InternalGenerationInput)
       receivedAt: new Date(occurredAt),
       routingStatus: DraftRoutingStatus.UNROUTED,
       routeSource: DraftRouteSource.UNKNOWN,
-      routingReason: "Internal generation requires manual legal entity assignment"
+      routingReason: "Geração interna exige atribuição manual de entidade legal."
     }
   });
 
@@ -343,7 +343,7 @@ export async function runInternalDraftGeneration(input: InternalGenerationInput)
         legalEntityId: null,
         routingStatus: DraftRoutingStatus.UNROUTED,
         routeSource: DraftRouteSource.UNKNOWN,
-        routingReason: "Internal generation requires manual legal entity assignment",
+        routingReason: "Geração interna exige atribuição manual de entidade legal.",
         rawPayload: result.rawPayload ?? input.requestPayload,
         aiRunId: updatedRun.id,
         eventSourceId: eventSource.id
@@ -380,7 +380,7 @@ export async function runInternalDraftGeneration(input: InternalGenerationInput)
       draftId: persisted.draftId
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Internal AI generation failed";
+    const message = error instanceof Error ? error.message : "Falha na geração interna de IA";
 
     await prisma.$transaction(async (tx) => {
       await tx.aiGatewayRun.update({

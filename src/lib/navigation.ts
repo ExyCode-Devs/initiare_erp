@@ -6,7 +6,7 @@ export const navItems = [
     items: [
       { label: "Dashboard", to: "/", icon: "LayoutDashboard" },
       { label: "Operacoes", to: "/operacoes", icon: "Activity" },
-      { label: "Validacao Financeira", to: "/validacao-financeira", icon: "ClipboardCheck" },
+      { label: "Validação Financeira", to: "/validacao-financeira", icon: "ClipboardCheck" },
       { label: "Advanced Ops", to: "/advanced-ops", icon: "Layers3" },
       { label: "Contas a Pagar", to: "/contas-a-pagar", icon: "ArrowUpRight" },
       { label: "Contas a Receber", to: "/contas-a-receber", icon: "ArrowDownLeft" },

@@ -205,7 +205,7 @@ describe("financial draft routes", () => {
     getDraftApprovalBlockersMock.mockReturnValue([
       {
         code: "missing_amount",
-        message: "Amount is required before approval."
+        message: "Valor e obrigatorio antes da aprovacao."
       }
     ]);
     const token = await loginAs(app, { role: "ANALYST", companyId: "company-1" });

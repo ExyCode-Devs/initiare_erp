@@ -373,7 +373,7 @@ const financialDraftRoutes: FastifyPluginAsync = async (app) => {
           ...payload,
           routingStatus: payload.legalEntityId ? DraftRoutingStatus.ROUTED : undefined,
           routeSource: payload.legalEntityId ? DraftRouteSource.MANUAL : undefined,
-          routingReason: payload.legalEntityId ? "Legal entity manually assigned by analyst" : undefined
+          routingReason: payload.legalEntityId ? "Entidade legal atribuída manualmente pelo analista." : undefined
         }
       });
 

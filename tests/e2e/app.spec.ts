@@ -20,7 +20,7 @@ test("login, dashboard, validation, finance pages, exceptions, and changelog wor
   await page.getByTestId("draft-list-item-draft-2").click();
   await page.getByPlaceholder("Motivo de rejeicao, ou nota de aprovacao.").fill("Need manual follow-up");
   await page.getByTestId("draft-reject-button").click();
-  await expect(page.getByText("Excecao").first()).toBeVisible();
+  await expect(page.getByText("Exceção").first()).toBeVisible();
 
   await page.goto("/contas-a-receber");
   await expect(page.getByRole("cell", { name: "Acme Industries", exact: true })).toBeVisible();

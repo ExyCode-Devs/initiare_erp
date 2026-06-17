@@ -97,7 +97,7 @@ export async function resolveCompanyFromDraftRoute(input: {
       legalEntityName: entityLabel(match),
       routingStatus: DraftRoutingStatus.ROUTED,
       routeSource: DraftRouteSource.CNPJ,
-      routingReason: `Routed by CNPJ ${normalizedCnpj}`
+      routingReason: `Roteado por CNPJ ${normalizedCnpj}`
     };
   }
   if (matchesByCnpj.length > 1) {
@@ -108,7 +108,7 @@ export async function resolveCompanyFromDraftRoute(input: {
       legalEntityName: null,
       routingStatus: DraftRoutingStatus.UNROUTED,
       routeSource: DraftRouteSource.CNPJ,
-      routingReason: `Ambiguous CNPJ route for ${normalizedCnpj}`
+      routingReason: `Roteamento ambíguo por CNPJ ${normalizedCnpj}`
     };
   }
 
@@ -129,7 +129,7 @@ export async function resolveCompanyFromDraftRoute(input: {
       legalEntityName: entityLabel(match),
       routingStatus: DraftRoutingStatus.ROUTED,
       routeSource: DraftRouteSource.MAILBOX,
-      routingReason: `Routed by mailbox alias ${normalizedRecipient || normalizedMailbox}`
+      routingReason: `Roteado por alias de caixa ${normalizedRecipient || normalizedMailbox}`
     };
   }
 
@@ -141,7 +141,7 @@ export async function resolveCompanyFromDraftRoute(input: {
       legalEntityName: null,
       routingStatus: DraftRoutingStatus.UNROUTED,
       routeSource: DraftRouteSource.MAILBOX,
-      routingReason: `Ambiguous mailbox route for ${normalizedRecipient || normalizedMailbox}`
+      routingReason: `Roteamento ambíguo por caixa ${normalizedRecipient || normalizedMailbox}`
     };
   }
 
@@ -158,7 +158,7 @@ export async function resolveCompanyFromDraftRoute(input: {
     routingStatus: DraftRoutingStatus.UNROUTED,
     routeSource: normalizedCnpj ? DraftRouteSource.CNPJ : DraftRouteSource.UNKNOWN,
     routingReason: normalizedCnpj
-      ? `No legal entity found for CNPJ ${normalizedCnpj}`
-      : "No legal entity match found from route hints"
+      ? `Nenhuma entidade legal encontrada para CNPJ ${normalizedCnpj}`
+      : "Nenhuma entidade legal encontrada a partir das pistas de roteamento"
   };
 }

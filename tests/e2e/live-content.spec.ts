@@ -83,7 +83,7 @@ test("live draft approval gate reflects local blockers before any external send"
 
   await expect(page.getByTestId("draft-approval-gate")).toContainText("Bloqueado");
   await expect(page.getByTestId("draft-approval-gate")).toContainText("Nao enviado");
-  await expect(page.getByText("Due date is required before approval.").last()).toBeVisible();
+  await expect(page.getByText("Vencimento e obrigatorio antes da aprovacao.").last()).toBeVisible();
   await expect(page.getByTestId("draft-approve-button")).toBeDisabled();
 });
 

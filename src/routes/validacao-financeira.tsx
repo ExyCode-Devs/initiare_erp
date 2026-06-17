@@ -14,6 +14,13 @@ import { InlineError, InlineState } from "@/components/app/state";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/api";
 import type { FinancialDraftDetailResponse, FinancialDraftListResponse, LegalEntitiesResponse } from "@/lib/api-types";
+import {
+  getDisplayStatus,
+  humanFinancialStatus,
+  humanReviewAction,
+  humanRouteSource,
+  humanRoutingReason,
+} from "@/lib/status-labels";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -46,7 +53,7 @@ const emptyDraftForm: DraftFormState = {
 };
 
 export const Route = createFileRoute("/validacao-financeira")({
-  head: () => ({ meta: [{ title: "Validacao Financeira · Veridia" }] }),
+  head: () => ({ meta: [{ title: "Validação Financeira · Veridia" }] }),
   component: ValidacaoFinanceiraPage,
 });
 
@@ -56,33 +63,6 @@ function formatDateTime(value: string | null) {
   }
 
   return new Date(value).toLocaleString("pt-BR");
-}
-
-function humanStatus(status: string) {
-  if (status === "pending_review") return "Em revisao";
-  if (status === "edited") return "Editado";
-  if (status === "approved") return "Aprovado";
-  if (status === "rejected") return "Rejeitado";
-  if (status === "duplicated") return "Duplicado";
-  if (status === "draft_ai") return "Rascunho IA";
-  if (status === "draft_integration") return "Rascunho integracao";
-  if (status === "queued") return "Na fila";
-  if (status === "running") return "Enviando";
-  if (status === "success") return "Concluido";
-  if (status === "error") return "Erro integracao";
-  if (status === "PENDENTE_REVISAO") return "Em revisao";
-  if (status === "APROVADO") return "Processado";
-  if (status === "REJEITADO") return "Excecao";
-  if (status === "ALTA") return "Alta";
-  if (status === "MEDIA") return "Media";
-  if (status === "BAIXA") return "Baixa";
-  if (status === "RECEIVED" || status === "PENDENTE") return "Pendente";
-  if (status === "PROCESSED" || status === "SUCESSO") return "Processado";
-  if (status === "SUCCESS") return "Processado";
-  if (status === "ERROR") return "Excecao";
-  if (status === "BLOCKED") return "Em revisao";
-  if (status === "FAILED" || status === "ERRO") return "Excecao";
-  return status;
 }
 
 function getApprovalGateSnapshot(detail: FinancialDraftDetailResponse) {
@@ -153,22 +133,22 @@ function getApprovalGateSnapshot(detail: FinancialDraftDetailResponse) {
   }
 
   return {
-    status: "Em revisao",
-    nextAction: "Analise humana pendente.",
-    externalState: "Nao enviado",
+    status: "Em revisão",
+    nextAction: "Análise humana pendente.",
+    externalState: "Não enviado",
   };
 }
 
 function getSourceTitle(detail: FinancialDraftDetailResponse) {
-  return detail.source?.subject ?? detail.sourceEmail?.subject ?? detail.source?.channel ?? "AI event";
+  return detail.source?.subject ?? detail.sourceEmail?.subject ?? detail.source?.channel ?? "Evento IA";
 }
 
 function getSourceActor(detail: FinancialDraftDetailResponse) {
-  return detail.source?.sender ?? detail.sourceEmail?.sender ?? detail.source?.channel ?? "AI event";
+  return detail.source?.sender ?? detail.sourceEmail?.sender ?? detail.source?.channel ?? "Evento IA";
 }
 
 function getSourceBody(detail: FinancialDraftDetailResponse) {
-  return detail.source?.summary ?? detail.sourceEmail?.bodyText ?? "No source summary available.";
+  return detail.source?.summary ?? detail.sourceEmail?.bodyText ?? "Nenhum resumo da fonte disponivel.";
 }
 
 function normalizeAttachments(detail: FinancialDraftDetailResponse) {
@@ -184,7 +164,7 @@ function normalizeAttachments(detail: FinancialDraftDetailResponse) {
   if (Array.isArray(detail.source?.attachments)) {
     return detail.source.attachments.map((attachment, index) => ({
       id: `attachment-${index}`,
-      title: `Attachment ${index + 1}`,
+      title: `Anexo ${index + 1}`,
       subtitle: "metadata",
       body: JSON.stringify(attachment, null, 2),
     }));
@@ -358,7 +338,7 @@ function ValidacaoFinanceiraPage() {
         method: "POST",
         body: {
           duplicateOfId,
-          note: rejectReason || "Marked as duplicate during review",
+          note: rejectReason || "Marcado como duplicado durante revisao",
         },
       }),
     onSuccess: refreshAll,
@@ -397,7 +377,7 @@ function ValidacaoFinanceiraPage() {
   if (listQuery.isLoading) {
     return (
       <div className="max-w-[1480px] mx-auto px-6 py-8">
-        <InlineState label="Carregando fila de validacao..." />
+        <InlineState label="Carregando fila de validação..." />
       </div>
     );
   }
@@ -420,8 +400,8 @@ function ValidacaoFinanceiraPage() {
   return (
     <div className="max-w-[1480px] mx-auto px-6 py-8 space-y-6">
       <PageHeader
-        title="Validacao Financeira"
-        desc="Fila humana para editar, aprovar ou rejeitar pre-entradas vindas do intake financeiro."
+        title="Validação Financeira"
+        desc="Fila humana para editar, aprovar ou rejeitar pré-entradas vindas do intake financeiro."
       />
 
       {!canReview ? (
@@ -488,7 +468,7 @@ function ValidacaoFinanceiraPage() {
                   <div className="min-w-0">
                     <div className="text-[14px] font-semibold truncate">{item.partyName}</div>
                     <div className="text-[12px] text-muted-foreground truncate">
-                      {item.source?.subject ?? item.email?.subject ?? item.source?.channel ?? "AI event"}
+                      {item.source?.subject ?? item.email?.subject ?? item.source?.channel ?? "Evento IA"}
                     </div>
                     <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
                       <span>{item.amount ? formatCurrency(item.amount) : "Sem valor"}</span>
@@ -496,9 +476,8 @@ function ValidacaoFinanceiraPage() {
                       <span>{item.dueDate ? item.dueDate.slice(0, 10) : "Sem vencimento"}</span>
                     </div>
                   </div>
-                    <div className="space-y-1 text-right">
-                      <StatusBadge status={humanStatus(item.status)} />
-                      <StatusBadge status={humanStatus(item.review.workflowStatus)} />
+                    <div className="text-right">
+                      <StatusBadge status={getDisplayStatus(item.status, item.review.workflowStatus)} />
                     </div>
                   </div>
                   {item.review.blockers.length ? (
@@ -526,9 +505,8 @@ function ValidacaoFinanceiraPage() {
                     {getSourceActor(detail)} · {formatDateTime(detail.source?.receivedAt ?? detail.sourceEmail?.receivedAt ?? null)}
                   </div>
                 </div>
-                <div className="space-y-1 text-right">
-                  <StatusBadge status={humanStatus(detail.status)} />
-                  <StatusBadge status={humanStatus(detail.review.workflowStatus)} />
+                <div className="text-right">
+                  <StatusBadge status={getDisplayStatus(detail.status, detail.review.workflowStatus)} />
                 </div>
               </div>
 
@@ -536,7 +514,7 @@ function ValidacaoFinanceiraPage() {
                 <div className="rounded-xl border border-border bg-background/60 p-4" data-testid="draft-approval-gate">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Approval gate</div>
+                      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Validacao para aprovacao</div>
                       <div className="mt-1 text-[16px] font-semibold">{approvalGate.status}</div>
                     </div>
                     <StatusBadge status={approvalGate.status} />
@@ -552,7 +530,7 @@ function ValidacaoFinanceiraPage() {
                     </div>
                     <div className="rounded-lg border border-border bg-card px-3 py-3">
                       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Workflow</div>
-                      <div className="mt-1">{humanStatus(detail.review.workflowStatus)}</div>
+                      <div className="mt-1">{humanFinancialStatus(detail.review.workflowStatus)}</div>
                     </div>
                   </div>
                 </div>
@@ -560,7 +538,7 @@ function ValidacaoFinanceiraPage() {
 
               {detail.review.blockers.length ? (
                 <div className="rounded-xl border border-warning/25 bg-warning/10 px-4 py-3">
-                  <div className="text-[11px] uppercase tracking-wider text-warning">Approval blockers</div>
+                  <div className="text-[11px] uppercase tracking-wider text-warning">Bloqueios de aprovacao</div>
                   <div className="mt-2 space-y-1 text-[12px] text-warning">
                     {detail.review.blockers.map((blocker) => (
                       <div key={blocker.code}>{blocker.message}</div>
@@ -607,7 +585,7 @@ function ValidacaoFinanceiraPage() {
                 </div>
 
                 <div className="space-y-4">
-                  <SectionHeader title="Fonte original" desc="AI event, anexos e retorno bruto da execucao." />
+                  <SectionHeader title="Fonte original" desc="Evento IA, anexos e retorno bruto da execucao." />
                   <div className="rounded-xl border border-border bg-background/60 p-4">
                     <div className="text-[12px] font-medium">{getSourceTitle(detail)}</div>
                     <div className="mt-1 text-[11px] text-muted-foreground">
@@ -631,21 +609,21 @@ function ValidacaoFinanceiraPage() {
                         ))
                       ) : (
                         <div className="rounded-lg border border-border bg-card px-3 py-2 text-[12px] text-muted-foreground">
-                          No attachment metadata.
+                          Nenhum metadado de anexo.
                         </div>
                       )}
                     </div>
                   </div>
 
                     <div className="rounded-xl border border-border bg-background/60 p-4">
-                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">AI run</div>
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Execucao IA</div>
                       <div className="space-y-2">
                       {runs.length ? (
                         runs.map((run) => (
                           <div key={run.id} className="rounded-lg border border-border bg-card px-3 py-2">
                             <div className="flex items-center justify-between gap-2">
                               <div className="font-medium text-[12px]">{run.title}</div>
-                              <StatusBadge status={humanStatus(run.status)} />
+                              <StatusBadge status={humanFinancialStatus(run.status)} />
                             </div>
                             {run.errorMessage ? <div className="mt-1 text-[11px] text-destructive">{run.errorMessage}</div> : null}
                             {run.payload ? (
@@ -657,14 +635,14 @@ function ValidacaoFinanceiraPage() {
                         ))
                         ) : (
                           <div className="rounded-lg border border-border bg-card px-3 py-2 text-[12px] text-muted-foreground">
-                            No AI run data.
+                            Nenhum dado de execucao da IA.
                           </div>
                         )}
                       </div>
                     </div>
 
                     <div className="rounded-xl border border-border bg-background/60 p-4">
-                      <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Duplicate candidates</div>
+                      <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Candidatos a duplicata</div>
                       <div className="space-y-2">
                         {detail.review.duplicateCandidates.length ? (
                           detail.review.duplicateCandidates.map((candidate) => (
@@ -689,7 +667,7 @@ function ValidacaoFinanceiraPage() {
                           ))
                         ) : (
                           <div className="rounded-lg border border-border bg-card px-3 py-2 text-[12px] text-muted-foreground">
-                            No duplicate candidates found.
+                            Nenhum candidato a duplicata encontrado.
                           </div>
                         )}
                       </div>
@@ -698,16 +676,16 @@ function ValidacaoFinanceiraPage() {
                     <div className="rounded-xl border border-border bg-background/60 p-4">
                     <div className="flex items-center justify-between gap-2">
                       <div>
-                        <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Execution flow</div>
+                        <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Fluxo de execucao</div>
                         <div className="mt-1 text-[12px] text-muted-foreground">
-                          Approval queues execution. Successful provider creation mirrors local records after OMIE returns.
+                          A aprovacao enfileira a execucao. A criacao no provedor espelha os registros locais apos retorno do OMIE.
                         </div>
                       </div>
-                      {execution ? <StatusBadge status={humanStatus(execution.status)} /> : null}
+                      {execution ? <StatusBadge status={humanFinancialStatus(execution.status)} /> : null}
                     </div>
 
                     <div className="mt-3 rounded-lg border border-border bg-card px-3 py-3 text-[12px]">
-                      <div>Status atual: {execution ? humanStatus(execution.status) : "Sem execucao"}</div>
+                      <div>Status atual: {execution ? humanFinancialStatus(execution.status) : "Sem execução"}</div>
                       <div className="mt-1 text-muted-foreground">
                         Ambiente: {execution?.environment ?? "HOMOLOG"}
                       </div>
@@ -733,7 +711,7 @@ function ValidacaoFinanceiraPage() {
                           <div key={entry.id} className="rounded-lg border border-border bg-card px-3 py-2">
                             <div className="flex items-center justify-between gap-2">
                               <div className="text-[12px] font-medium">{entry.method} {entry.endpoint.split("/api/v1/")[1] ?? entry.endpoint}</div>
-                              <StatusBadge status={humanStatus(entry.operationStatus)} />
+                              <StatusBadge status={humanFinancialStatus(entry.operationStatus)} />
                             </div>
                             <div className="mt-1 text-[11px] text-muted-foreground">
                               {formatDateTime(entry.createdAt)} {entry.httpStatus ? `· HTTP ${entry.httpStatus}` : ""}
@@ -743,17 +721,19 @@ function ValidacaoFinanceiraPage() {
                         ))
                       ) : (
                         <div className="rounded-lg border border-border bg-card px-3 py-2 text-[12px] text-muted-foreground">
-                          No OMIE request history.
+                          Nenhum historico de requisicoes OMIE.
                         </div>
                       )}
                     </div>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <StatusBadge status={humanStatus(detail.routingStatus)} />
-                    <StatusBadge status={detail.routeSource} />
+                    <StatusBadge status={humanFinancialStatus(detail.routingStatus)} />
+                    <StatusBadge status={humanRouteSource(detail.routeSource)} />
                     <StatusBadge status={detail.legalEntityName ?? "Sem entidade"} />
                   </div>
-                  {detail.routingReason ? <div className="mt-2 text-[12px] text-muted-foreground">{detail.routingReason}</div> : null}
+                  {detail.routingReason ? (
+                    <div className="mt-2 text-[12px] text-muted-foreground">{humanRoutingReason(detail.routingReason)}</div>
+                  ) : null}
                 </div>
               </div>
 
@@ -764,7 +744,7 @@ function ValidacaoFinanceiraPage() {
                     <div key={review.id} className="rounded-lg border border-border bg-card px-3 py-3">
                       <div className="flex items-center justify-between gap-2">
                         <div className="font-medium text-[12px]">
-                          {review.user.name} · {review.action}
+                          {review.user.name} · {humanReviewAction(review.action)}
                         </div>
                         <div className="text-[11px] text-muted-foreground">{formatDateTime(review.createdAt)}</div>
                       </div>

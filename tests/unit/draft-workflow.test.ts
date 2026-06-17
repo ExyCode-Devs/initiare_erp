@@ -129,7 +129,7 @@ describe("draft-workflow", () => {
           email: "admin@example.com",
         },
       }),
-    ).rejects.toThrow("Amount is required before approval.");
+    ).rejects.toThrow("Valor e obrigatorio antes da aprovacao.");
 
     expect(prismaMock.accountPayable.create).not.toHaveBeenCalled();
   });

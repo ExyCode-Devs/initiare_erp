@@ -6,15 +6,15 @@ import { prisma } from "../lib/prisma.js";
 
 const financeStatusMap: Record<FinanceStatus, string> = {
   PROCESSADO: "Processado",
-  EM_REVISAO: "Em revisao",
-  EXCECAO: "Excecao",
+  EM_REVISAO: "Em revisão",
+  EXCECAO: "Exceção",
   CONCILIADO: "Conciliado",
   PENDENTE: "Pendente"
 };
 
 const severityMap: Record<Severity, string> = {
   ALTA: "Alta",
-  MEDIA: "Media",
+  MEDIA: "Média",
   BAIXA: "Baixa"
 };
 

@@ -23,6 +23,7 @@ import {
 import { InlineError, InlineState } from "@/components/app/state";
 import { useAuth } from "@/hooks/use-auth";
 import { apiDownload, apiRequest } from "@/lib/api";
+import { getDisplayStatuses, humanFinancialStatus } from "@/lib/status-labels";
 import type {
   AutomationSummaryResponse,
   InboxEmailDetailResponse,
@@ -88,38 +89,6 @@ function sizeLabel(bytes: number) {
   }
 
   return `${bytes} B`;
-}
-
-function statusPill(status: string) {
-  if (status === "SUCESSO") {
-    return "Processado";
-  }
-  if (status === "ERRO") {
-    return "Excecao";
-  }
-  if (status === "AGUARDANDO_VALIDACAO") {
-    return "Em revisao";
-  }
-  if (status === "PENDENTE_REVISAO") {
-    return "Em revisao";
-  }
-  if (status === "RECEBIDO" || status === "PROCESSANDO") {
-    return "Pendente";
-  }
-  if (status === "ALTA") {
-    return "Alta";
-  }
-  if (status === "MEDIA") {
-    return "Media";
-  }
-  if (status === "BAIXA") {
-    return "Baixa";
-  }
-  return status
-    .toLowerCase()
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 }
 
 function InboxFinanceiroPage() {
@@ -588,10 +557,9 @@ function InboxFinanceiroPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 space-y-1">
-                    <StatusBadge status={statusPill(item.status)} />
-                    {item.extractionStatus ? (
-                      <StatusBadge status={statusPill(item.extractionStatus)} />
-                    ) : null}
+                    {getDisplayStatuses(item.status, item.extractionStatus).map((label) => (
+                      <StatusBadge key={`${item.id}-${label}`} status={label} />
+                    ))}
                   </td>
                   <td className="px-4 py-3">
                     {item.draft ? (
@@ -599,7 +567,7 @@ function InboxFinanceiroPage() {
                         <div className="font-medium">{item.draft.partyName}</div>
                         <div className="text-[11px] text-muted-foreground">
                           {item.draft.amount ? formatCurrency(item.draft.amount) : "Sem valor"} ·{" "}
-                          {statusPill(item.draft.confidenceBand)}
+                          {humanFinancialStatus(item.draft.confidenceBand)}
                         </div>
                       </div>
                     ) : (
@@ -632,7 +600,7 @@ function InboxFinanceiroPage() {
                     {detailQuery.data.sender} · {formatDateTime(detailQuery.data.receivedAt)}
                   </div>
                 </div>
-                <StatusBadge status={statusPill(detailQuery.data.status)} />
+                <StatusBadge status={humanFinancialStatus(detailQuery.data.status)} />
               </div>
 
               {detailQuery.data.processingError ? (
@@ -699,7 +667,7 @@ function InboxFinanceiroPage() {
                           <div className="text-[12px] font-medium">
                             {run.workflowId || run.provider}
                           </div>
-                          <StatusBadge status={statusPill(run.status)} />
+                          <StatusBadge status={humanFinancialStatus(run.status)} />
                         </div>
                         <div className="mt-1 text-[11px] text-muted-foreground">
                           {run.durationMs ? `${run.durationMs} ms` : "sem duracao"} ·{" "}
@@ -722,7 +690,7 @@ function InboxFinanceiroPage() {
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="font-medium text-[12.5px]">{draft.partyName}</div>
-                          <StatusBadge status={statusPill(draft.status)} />
+                          <StatusBadge status={humanFinancialStatus(draft.status)} />
                         </div>
                         <div className="mt-1 text-[12px] text-muted-foreground">
                           {draft.amount ? formatCurrency(draft.amount) : "Sem valor"} ·{" "}
@@ -759,7 +727,7 @@ function InboxFinanceiroPage() {
                   <Activity className="size-4 text-ai" />
                   <span className="font-medium">{run.runType}</span>
                 </div>
-                <StatusBadge status={statusPill(run.status)} />
+                <StatusBadge status={humanFinancialStatus(run.status)} />
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2 text-[12px]">
                 <div className="rounded-md border border-border bg-card px-3 py-2">

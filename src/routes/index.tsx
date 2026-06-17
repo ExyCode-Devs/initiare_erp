@@ -237,7 +237,15 @@ function Dashboard() {
                   <div key={item.id} className="rounded-lg border border-border bg-card px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-[12px] font-medium">{item.externalId ?? "Sem ID externo"}</div>
-                      <StatusBadge status={item.status === "SUCCESS" ? "Processado" : item.status === "BLOCKED" ? "Em revisao" : "Excecao"} />
+                      <StatusBadge
+                        status={
+                          item.status === "SUCCESS"
+                            ? "Processado"
+                            : item.status === "BLOCKED"
+                              ? "Em revisão"
+                              : "Exceção"
+                        }
+                      />
                     </div>
                     <div className="mt-1 text-[11px] text-muted-foreground">
                       {item.syncedAt ? new Date(item.syncedAt).toLocaleString("pt-BR") : "Sem sync"}
@@ -247,7 +255,7 @@ function Dashboard() {
                 ))
               ) : (
                 <div className="rounded-lg border border-border bg-card px-3 py-2 text-[12px] text-muted-foreground">
-                  No OMIE exports yet.
+                  Nenhuma exportação OMIE ainda.
                 </div>
               )}
             </div>
@@ -333,9 +341,9 @@ function Dashboard() {
                           <StatusBadge
                             status={
                               item.status === "FAILED" || item.status === "ERRO"
-                                ? "Excecao"
+                                ? "Exceção"
                                 : item.status === "RECEIVED" || item.status === "AGUARDANDO_VALIDACAO"
-                                  ? "Em revisao"
+                                  ? "Em revisão"
                                   : "Processado"
                             }
                           />
@@ -407,7 +415,7 @@ function Dashboard() {
                           <StatusBadge
                             status={
                               item.status === "FAILED"
-                                ? "Excecao"
+                                ? "Exceção"
                                 : item.status === "RUNNING"
                                   ? "Pendente"
                                   : "Processado"
